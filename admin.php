@@ -150,6 +150,11 @@ class BVAdmin {
 
 	public function initBranding($plugins) {
 		$slug = $this->bvmain->slug;
+		
+		if (!is_array($plugins) || !isset($slug, $plugins)) {
+			return $plugins;
+		}
+
 		$brand = $this->bvmain->getBrandInfo();
 		if ($brand) {
 			if (array_key_exists('hide', $brand)) {
