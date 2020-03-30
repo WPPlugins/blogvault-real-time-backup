@@ -3,6 +3,7 @@
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVUpgraderSkin')) :
 class BVUpgraderSkin extends WP_Upgrader_Skin {
+	public $status = array();
 	public $action = '';
 	public $plugin_info = array();
 	public $theme_info = array();
@@ -42,7 +43,6 @@ class BVUpgraderSkin extends WP_Upgrader_Skin {
 	}
 
 	function error($errors) {
-		global $bvresp;
 		$key = $this->get_key();
 		$message = array();
 		$message['error'] = true;
@@ -52,17 +52,16 @@ class BVUpgraderSkin extends WP_Upgrader_Skin {
 			$message['data'] = $errors->get_error_data();
 			$message['code'] = $errors->get_error_code();
 		}
-		$bvresp->addArrayToStatus($this->action.':'.$key, $message);
+		$this->status[$this->action.':'.$key][] = $message;
 	}
 
 	function feedback($string) {
-		global $bvresp;
 		if ( empty($string) )
 			return;
 		$key = $this->get_key();
 		$message = array();
 		$message['message'] = $string;
-		$bvresp->addArrayToStatus($this->action.':'.$key, $message);
+		$this->status[$this->action.':'.$key][] = $message;
 	}
 }
 endif;

@@ -3,12 +3,19 @@
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVMonitCallback')) :
 
-class BVMonitCallback {
+class BVMonitCallback extends BVCallbackBase {
+	public $db;
+	public $settings;
+
+	public function __construct($callback_handler) {
+		$this->db = $callback_handler->db;
+		$this->settings = $callback_handler->settings;
+	}
+
 	public function getData($table, $limit = 0, $filter = "") {
-		global $bvcb;
 		$result = array();
 		$data = array();
-		$rows = $bvcb->bvmain->db->getTableContent($table, '*', $filter, $limit);
+		$rows = $this->db->getTableContent($table, '*', $filter, $limit);
 		$last_id = 0;
 		foreach ($rows as $row) {
 			$result[] = $row;
@@ -20,58 +27,66 @@ class BVMonitCallback {
 	}
 
 	public function deleteBvDynamicEvents($filter = "") {
-		global $bvcb;
-		$name = BVDynSync::$dynsync_table;
-		return $bvcb->bvmain->db->deleteBVTableContent($name, $filter);
+		$name = BVWPDynSync::$dynsync_table;
+		return $this->db->deleteBVTableContent($name, $filter);
 	}
 
-	public function process($method) {
-		global $bvresp, $bvcb;
-		$db = $bvcb->bvmain->db;
-		$info = $bvcb->bvmain->info;
-		$bvcb->bvmain->setMonitTime();
-		switch ($method) {
+  public function setMonitTime() {
+    return $this->settings->updateOption('bvmonittime', time());
+	}
+
+	public function process($request) {
+		$db = $this->db;
+		$settings = $this->settings;
+		$this->setMonitTime();
+		$params = $request->params;
+		switch ($request->method) {
 		case "getdata":
-			if (array_key_exists('lp', $_REQUEST)) {
-				require_once dirname( __FILE__ ) . '/../../lp/config.php';
-				$lp_params = $_REQUEST['lp'];
+			$resp = array();
+			if (array_key_exists('lp', $params)) {
+				require_once dirname( __FILE__ ) . '/../../protect/wp_lp/config.php';
+				$lp_params = $params['lp'];
 				$limit = intval(urldecode($lp_params['limit']));
 				$filter = urldecode($lp_params['filter']);
-				$db->deleteBVTableContent(BVLPConfig::$requests_table, $lp_params['rmfilter']);
-				$table = $bvcb->bvmain->db->getBVTable(BVLPConfig::$requests_table);
-				$bvresp->addStatus("lplogs", $this->getData($table, $limit, $filter));
+				$db->deleteBVTableContent(BVWPLPConfig::$requests_table, $lp_params['rmfilter']);
+				$table = $db->getBVTable(BVWPLPConfig::$requests_table);
+				$resp["lplogs"] = $this->getData($table, $limit, $filter);
 			}
-			if (array_key_exists('fw', $_REQUEST)) {
-				require_once dirname( __FILE__ ) . '/../../fw/config.php';
-				$fw_params = $_REQUEST['fw'];
+			if (array_key_exists('fw', $params)) {
+				require_once dirname( __FILE__ ) . '/../../protect/wp_fw/config.php';
+				$fw_params = $params['fw'];
 				$limit = intval(urldecode($fw_params['limit']));
 				$filter = urldecode($fw_params['filter']);
-				$db->deleteBVTableContent(BVFWConfig::$requests_table, $fw_params['rmfilter']);
-				$table = $bvcb->bvmain->db->getBVTable(BVFWConfig::$requests_table);
-				$bvresp->addStatus("fwlogs", $this->getData($table, $limit, $filter));
+				$db->deleteBVTableContent(BVWPFWConfig::$requests_table, $fw_params['rmfilter']);
+				$table = $db->getBVTable(BVWPFWConfig::$requests_table);
+				$resp["fwlogs"] = $this->getData($table, $limit, $filter);
 			}
-			if (array_key_exists('dynevent', $_REQUEST)) {
-				require_once dirname( __FILE__ ) . '/../../dynsync.php';
-				$isdynsyncactive = $info->getOption('bvDynSyncActive');
+			if (array_key_exists('dynevent', $params)) {
+				require_once dirname( __FILE__ ) . '/../../wp_dynsync.php';
+				$isdynsyncactive = $settings->getOption('bvDynSyncActive');
 				if ($isdynsyncactive == 'yes') {
-					$limit = intval(urldecode($_REQUEST['limit']));
-					$filter = urldecode($_REQUEST['filter']);
-					$this->deleteBvDynamicEvents($_REQUEST['rmfilter']);
-					$table = $bvcb->bvmain->db->getBVTable(BVDynSync::$dynsync_table);
+					$limit = intval(urldecode($params['limit']));
+					$filter = urldecode($params['filter']);
+					$this->deleteBvDynamicEvents($params['rmfilter']);
+					$table = $db->getBVTable(BVWPDynSync::$dynsync_table);
 					$data = $this->getData($table, $limit, $filter);
-					$bvresp->addStatus('last_id', $data['last_id']);
-					$bvresp->addStatus('events', $data['rows']);
-					$bvresp->addStatus('timestamp', time());
-					$bvresp->addStatus("status", true);
+					$resp['last_id'] = $data['last_id'];
+					$resp['events'] = $data['rows'];
+					$resp['timestamp'] = time();
+					$resp["status"] = true;
 				}
 			}
+			$resp["status"] = "done";
 			break;
 		case "rmdata":
-			require_once dirname( __FILE__ ) . '/../../dynsync.php';
-			$filter = urldecode($_REQUEST['filter']);
-			$bvresp->addStatus("status", $this->deleteBvDynamicEvents($filter));
+			require_once dirname( __FILE__ ) . '/../../wp_dynsync.php';
+			$filter = urldecode($params['filter']);
+			$resp = array("status" => $this->deleteBvDynamicEvents($filter));
 			break;
+		default:
+			$resp = false;
 		}
+		return $resp;
 	}
 }
 endif;

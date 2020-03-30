@@ -2,33 +2,57 @@
 
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVAccountCallback')) :
+class BVAccountCallback extends BVCallbackBase {
+	public $account;
+	public $settings;
 
-require_once dirname( __FILE__ ) . '/../../account.php';
+	public function __construct($callback_handler) {
+		$this->account = $callback_handler->account;
+		$this->settings = $callback_handler->settings;
+	}
 
-class BVAccountCallback {
-
-	function process($method) {
-		global $bvresp, $bvcb;
-		$account = new BVAccountInfo($bvcb->bvmain);
-		switch ($method) {
+	function process($request) {
+		$params = $request->params;
+		$account = $this->account;
+		$settings = $this->settings;
+		switch ($request->method) {
+		case "addacc":
+			BVAccount::addAccount($this->settings, $params['public'], $params['secret']);
+			$resp = array("status" => BVAccount::exists($this->settings, $params['public']));
+			break;
+		case "rmacc":
+			$resp = array("status" => $account->remove($params['public']));
+			break;
 		case "updt":
 			$info = array();
-			$info['email'] = $_REQUEST['email'];
-			$info['url'] = $_REQUEST['url'];
-			$info['pubkey'] = $_REQUEST['pubkey'];
-			$account->add($info);
-			$bvresp->addStatus("status", $account->doesAccountExists($_REQUEST['pubkey']));
+			$info['email'] = $params['email'];
+			$info['url'] = $params['url'];
+			$info['pubkey'] = $params['pubkey'];
+			$account->updateInfo($info);
+			$resp = array("status" => BVAccount::exists($this->settings, $params['pubkey']));
 			break;
-		case "disc":
-			$account->remove($_REQUEST['pubkey']);
-			$bvresp->addStatus("status", !$account->doesAccountExists($_REQUEST['pubkey']));
+		case "updtapikey":
+			$resp = array("status" => BVAccount::updateApiPublicKey($this->settings, $params['pubkey']));
+			break;
+		case "rmdefsec":
+			$resp = array("status" => $settings->deleteOption('bvDefaultSecret'));
+			break;
+		case "rmbvkeys":
+			$resp = array("status" => $settings->deleteOption('bvKeys'));
+			break;
+		case "rmdefpub":
+			$resp = array("status" => $settings->deleteOption('bvDefaultPublic'));
+			break;
+		case "rmoldbvacc":
+			$resp = array("status" => $settings->deleteOption('bvAccounts'));
+			break;
 		case "fetch":
-			$bvresp->addStatus("status", $account->allAccounts());
+			$resp = array("status" => BVAccount::allAccounts($this->settings));
 			break;
 		default:
-			return false;
+			$resp = false;
 		}
-		return true;
+		return $resp;
 	}
 }
 endif;

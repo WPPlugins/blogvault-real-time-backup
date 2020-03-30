@@ -3,16 +3,25 @@
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVProtectCallback')) :
 
-require_once dirname( __FILE__ ) . '/../../protect.php';
+require_once dirname( __FILE__ ) . '/../../protect/protect.php';
 
-class BVProtectCallback {
-	public function process($method) {
-		global $bvcb, $bvresp;
-		$protect = new BVProtect($bvcb->bvmain);
-		$info = $bvcb->bvmain->info;
-		switch ($method) {
+class BVProtectCallback extends BVCallbackBase {
+	public $db;
+	public $settings;
+
+	public function __construct($callback_handler) {
+		$this->db = $callback_handler->db;
+		$this->settings = $callback_handler->settings;
+	}
+
+	public function process($request) {
+		$bvinfo = new BVInfo($this->settings);
+		$protect = new BVProtect($this->db, $this->settings);
+		$params = $request->params;
+		switch ($request->method) {
 		case "gtipprobeinfo":
-			$headers = $_REQUEST['hdrs'];
+			$resp = array();
+			$headers = $params['hdrs'];
 			$hdrsinfo = array();
 			if ($headers && is_array($headers)) {
 				foreach($headers as $hdr) {
@@ -21,42 +30,43 @@ class BVProtectCallback {
 					}
 				}
 			}
-			$bvresp->addStatus("hdrsinfo", $hdrsinfo);
-			if ($iphdr = $info->getOption($bvcb->bvmain->ip_header_option)) {
-				$bvresp->addStatus("iphdr", $iphdr);
+			$resp["hdrsinfo"] = $hdrsinfo;
+			if ($iphdr = $this->settings->getOption($bvinfo->ip_header_option)) {
+				$resp["iphdr"] = $iphdr;
 			}
 			break;
 		case "gtraddr":
 			$raddr = array_key_exists('REMOTE_ADDR', $_SERVER) ? $_SERVER['REMOTE_ADDR'] : false;
-			$bvresp->addStatus("raddr", $raddr);
+			$resp = array("raddr" => $raddr);
 			break;
 		case "gtallhdrs":
 			$data = (function_exists('getallheaders')) ? getallheaders() : false;
-			$bvresp->addStatus("allhdrs", $data);
+			$resp = array("allhdrs" => $data);
 			break;
 		case "gtsvr":
-			$bvresp->addStatus("svr", $_SERVER);
+			$resp = array("svr" => $_SERVER);
 			break;
 		case "gtip":
-			$bvresp->addStatus("ip", $protect->getIP());
+			$resp = array("ip" => $protect->getIP());
 			break;
 		case "stiphdr":
-			$option_name = $bvcb->bvmain->ip_header_option;
-			$iphdr = array('hdr' => $_REQUEST['hdr'], 'pos' => $_REQUEST['pos']);
-			$info->updateOption($option_name, $iphdr);
-			$bvresp->addStatus("iphdr", $info->getOption($option_name));
+			$option_name = $bvinfo->ip_header_option;
+			$iphdr = array('hdr' => $params['hdr'], 'pos' => $params['pos']);
+			$this->settings->updateOption($option_name, $iphdr);
+			$resp = array("iphdr" => $this->settings->getOption($option_name));
 			break;
 		case "gtiphdr":
-			$bvresp->addStatus("iphdr", $info->getOption($bvcb->bvmain->ip_header_option));
+			$resp = array("iphdr" => $this->settings->getOption($bvinfo->ip_header_option));
 			break;
 		case "rmiphdr":
-			$option_name = $bvcb->bvmain->ip_header_option;
-			$info->deleteOption($option_name);
-			$bvresp->addStatus("iphdr", $info->getOption($option_name));
+			$option_name = $bvinfo->ip_header_option;
+			$this->settings->deleteOption($option_name);
+			$resp = array("iphdr" => $this->settings->getOption($option_name));
 			break;
 		default:
-			return false;
+			$resp = false;
 		}
+		return $resp;
 	}
 }
 endif;

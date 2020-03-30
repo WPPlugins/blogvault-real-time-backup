@@ -3,19 +3,25 @@
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVDynSyncCallback')) :
 	
-require_once dirname( __FILE__ ) . '/../../dynsync.php';
+require_once dirname( __FILE__ ) . '/../../wp_dynsync.php';
 
-class BVDynSyncCallback {
-	public function dropDynSyncTable() {
-		global $bvcb;
-		return $bvcb->bvmain->db->dropBVTable(BVDynSync::$dynsync_table);
+class BVDynSyncCallback extends BVCallbackBase {
+	public $db;
+	public $settings;
+
+	public function __construct($callback_handler) {
+		$this->db = $callback_handler->db;
+		$this->settings = $callback_handler->settings;
 	}
 
-	public function createDynSyncTable() {
-		global $bvcb;
-		$db = $bvcb->bvmain->db;
+	public function dropDynSyncTable() {
+		return $this->db->dropBVTable(BVWPDynSync::$dynsync_table);
+	}
+
+	public function createDynSyncTable($usedbdelta = false) {
+		$db = $this->db;
 		$charset_collate = $db->getCharsetCollate();
-		$table = $bvcb->bvmain->db->getBVTable(BVDynSync::$dynsync_table);
+		$table = $this->db->getBVTable(BVWPDynSync::$dynsync_table);
 		$query = "CREATE TABLE $table (
 			id bigint(20) NOT NULL AUTO_INCREMENT,
 			site_id int NOT NULL,
@@ -24,58 +30,61 @@ class BVDynSyncCallback {
 			event_data text NOT NULL DEFAULT '',
 			PRIMARY KEY (id)
 		) $charset_collate;";
-		return $db->createTable($query, BVDynSync::$dynsync_table);
+		return $db->createTable($query, BVWPDynSync::$dynsync_table, $usedbdelta);
 	}
 
-	public function process($method) {
-		global $bvresp, $bvcb;
-		$info = $bvcb->bvmain->info;
-		switch ($method) {
+	public function process($request) {
+		$settings = $this->settings;
+		$params = $request->params;
+		switch ($request->method) {
 		case "truncdynsynctable":
-			$bvresp->addStatus("status", $bvcb->bvmain->db->truncateBVTable(BVDynSync::$dynsync_table));
+			$resp = array("status" => $this->db->truncateBVTable(BVWPDynSync::$dynsync_table));
 			break;
 		case "dropdynsynctable":
-			$bvresp->addStatus("status", $this->dropDynSyncTable());
+			$resp = array("status" => $this->dropDynSyncTable());
 			break;
 		case "createdynsynctable":
-			$bvresp->addStatus("status", $this->createDynSyncTable());
+			$usedbdelta = array_key_exists('usedbdelta', $params);
+			$resp = array("status" => $this->createDynSyncTable($usedbdelta));
 			break;
 		case "setdynsync":
-			if (array_key_exists('dynplug', $_REQUEST)) {
-				$info->updateOption('bvdynplug', $_REQUEST['dynplug']);
+			if (array_key_exists('dynplug', $params)) {
+				$settings->updateOption('bvdynplug', $params['dynplug']);
 			} else {
-				$info->deleteOption('bvdynplug');
+				$settings->deleteOption('bvdynplug');
 			}
-			$info->updateOption('bvDynSyncActive', $_REQUEST['dynsync']);
+			$settings->updateOption('bvDynSyncActive', $params['dynsync']);
+			$resp = array("status" => "done");
 			break;
 		case "setwoodyn":
-			$info->updateOption('bvWooDynSync', $_REQUEST['woodyn']);
+			$resp = array("status" => $settings->updateOption('bvWooDynSync', $params['woodyn']));
 			break;
 		case "setignorednames":
-			switch ($_REQUEST['table']) {
+			switch ($params['table']) {
 			case "options":
-				$info->updateOption('bvIgnoredOptions', $_REQUEST['names']);
+				$settings->updateOption('bvIgnoredOptions', $params['names']);
 				break;
 			case "postmeta":
-				$info->updateOption('bvIgnoredPostmeta', $_REQUEST['names']);
+				$settings->updateOption('bvIgnoredPostmeta', $params['names']);
 				break;
 			}
+			$resp = array("status" => "done");
 			break;
 		case "getignorednames":
-			switch ($_REQUEST['table']) {
+			switch ($params['table']) {
 			case "options":
-				$names = $info->getOption('bvIgnoredOptions');
+				$names = $settings->getOption('bvIgnoredOptions');
 				break;
 			case "postmeta":
-				$names = $info->getOption('bvIgnoredPostmeta');
+				$names = $settings->getOption('bvIgnoredPostmeta');
 				break;
 			}
-			$bvresp->addStatus("names", $names);
+			$resp = array("names", $names);
 			break;
 		default:
-			return false;
+			$resp = false;
 		}
-		return true;
+		return $resp;
 	}
 }
 endif;

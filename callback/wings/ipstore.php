@@ -3,26 +3,28 @@
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVIPStoreCallback')) :
 
-require_once dirname( __FILE__ ) . '/../../ipstore.php';
+require_once dirname( __FILE__ ) . '/../../protect/ipstore.php';
 
-class BVIPStoreCallback {
+class BVIPStoreCallback extends BVCallbackBase {
+	public $db;
+
+	public function __construct($callback_handler) {
+		$this->db = $callback_handler->db;
+	}
 
 	public function updateBVTableContent($table, $value, $filter) {
-		global $bvcb;
-		$bvcb->bvmain->db->query("UPDATE $table SET $value $filter;");
+		$this->db->query("UPDATE $table SET $value $filter;");
 	}
 
 	public function insertBVTableContent($table, $fields, $value) {
-		global $bvcb;
-		$bvcb->bvmain->db->query("INSERT INTO $table $fields values $value;");
+		$this->db->query("INSERT INTO $table $fields values $value;");
 	}
 
 	public function deleteIPs($table, $rmfilters) {
 		if (is_array($rmfilters)) {
-			global $bvcb;
 			foreach ($rmfilters as $rmfilter) {
 				$rmfilter = base64_decode($rmfilter);
-				$bvcb->bvmain->db->deleteBVTableContent($table, $rmfilter);
+				$this->db->deleteBVTableContent($table, $rmfilter);
 			}
 		}
 	}
@@ -46,21 +48,18 @@ class BVIPStoreCallback {
 	}
 
 	public function getIPs($table, $auto_increment_offset, $type, $category) {
-		global $bvcb;
 		$query = "SELECT `start_ip_range` FROM $table WHERE id < $auto_increment_offset AND `type` = $type AND ";
 		$query .= ($category == BVIPStore::FW) ? "`is_fw` = true;" : "`is_lp` = true;";
-		return $bvcb->bvmain->db->getCol($query);
+		return $this->db->getCol($query);
 	}
 
 	public function getIPStoreOffset($table, $auto_increment_offset) {
-		global $bvcb;
-		$db = $bvcb->bvmain->db;
+		$db = $this->db;
 		return intval($db->getVar("SELECT MAX(id) FROM $table WHERE id < $auto_increment_offset"));
 	}
 
 	public function getIPStoreInfo($table, $auto_increment_offset) {
-			global $bvcb;
-			$db = $bvcb->bvmain->db;
+			$db = $this->db;
 			$info = array();
 			$info['fw_blacklisted_ips'] = $this->getIPs($table, $auto_increment_offset, BVIPStore::BLACKLISTED, BVIPStore::FW);
 			$info['lp_blacklisted_ips'] = $this->getIPs($table, $auto_increment_offset, BVIPStore::BLACKLISTED, BVIPStore::LP);
@@ -71,45 +70,45 @@ class BVIPStoreCallback {
 			return $info;
 	}
 
-	public function process($method) {
-		global $bvresp, $bvcb;
-		$db = $bvcb->bvmain->db;
-		$table = $_REQUEST['table'];
+	public function process($request) {
+		$db = $this->db;
+		$params = $request->params;
+		$table = $params['table'];
 		$bvTable = $db->getBVTable($table);
-		$auto_increment_offset = $_REQUEST['auto_increment_offset'];
+		$auto_increment_offset = $params['auto_increment_offset'];
 		if (!$db->isTablePresent($bvTable)) {
-			$bvresp->addStatus("info", false);
+			$resp = array("info" => false);
 		} else {
-			switch ($method) {
+			switch ($request->method) {
 			case "ipstrinfo":
 				$info = $this->getIPStoreInfo($bvTable, $auto_increment_offset);
-				$bvresp->addStatus("info", $info);
+				$resp = array("info" => $info);
 				break;
 			case "insrtips":
-				$values = $_REQUEST['values'];
-				$fields = $_REQUEST['fields'];
-				$rmfilter = $_REQUEST['rmfilter'];
+				$values = $params['values'];
+				$fields = $params['fields'];
+				$rmfilter = $params['rmfilter'];
 				if ($rmfilter) {
 					$db->deleteBVTableContent($table, $rmfilter);
 				}
 				$this->insertIPs($bvTable, $fields, $values);
-				$bvresp->addStatus("offset", $this->getIPStoreOffset($bvTable, $auto_increment_offset));
+				$resp = array("offset" => $this->getIPStoreOffset($bvTable, $auto_increment_offset));
 				break;
 			case "dltips":
-				$rmfilters = $_REQUEST['rmfilters'];
+				$rmfilters = $params['rmfilters'];
 				$this->deleteIPs($table, $rmfilters);
-				$bvresp->addStatus("offset", $this->getIPStoreOffset($bvTable, $auto_increment_offset));
+				$resp = array("offset" => $this->getIPStoreOffset($bvTable, $auto_increment_offset));
 				break;
 			case "updtips":
-				$value = $_REQUEST['value'];
-				$filters = $_REQUEST['filters'];
+				$value = $params['value'];
+				$filters = $params['filters'];
 				$this->updateIPs($bvTable, $value, $filters);
-				$bvresp->addStatus("offset", $this->getIPStoreOffset($bvTable, $auto_increment_offset));
+				$resp = array("offset" => $this->getIPStoreOffset($bvTable, $auto_increment_offset));
 				break;
 			default:
-				return false;
+				$resp = false;
 			}
-			return true;
+			return $resp;
 		}
 	}
 }

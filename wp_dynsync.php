@@ -1,17 +1,17 @@
 <?php
 
 if (!defined('ABSPATH')) exit;
-if (!class_exists('BVDynSync')) :
+if (!class_exists('BVWPDynSync')) :
 	
-class BVDynSync {
+class BVWPDynSync {
 
 	public static $dynsync_table = 'dynamic_sync';
-	public $bvmain;
-	/**
-	 * PHP5 constructor.
-	 */
-	function __construct($bvmain) {
-		$this->bvmain = $bvmain;
+	public $db;
+	public $settings;
+
+	public function __construct($db, $settings) {
+		$this->db = $db;
+		$this->settings = $settings;
 	}
 
 	function init() {
@@ -20,17 +20,17 @@ class BVDynSync {
 	}
 
 	public function clearConfig() {
-		$this->bvmain->info->deleteOption('bvdynplug');
-		$this->bvmain->info->deleteOption('bvDynSyncActive');
-		$this->bvmain->info->deleteOption('bvWooDynSync');
-		$this->bvmain->db->dropBVTable(BVDynSync::$dynsync_table);
+		$this->settings->deleteOption('bvdynplug');
+		$this->settings->deleteOption('bvDynSyncActive');
+		$this->settings->deleteOption('bvWooDynSync');
+		$this->db->dropBVTable(BVWPDynSync::$dynsync_table);
 	}
 
 	function add_event($event_type, $event_data) {
 		global $wp_current_filter;
 		$site_id = get_current_blog_id();
 		$values = array ( "event_type" => $event_type, "event_tag" => end($wp_current_filter), "event_data" => maybe_serialize($event_data), "site_id" => $site_id);
-		$this->bvmain->db->replaceIntoBVTable(BVDynSync::$dynsync_table, $values);
+		$this->db->replaceIntoBVTable(BVWPDynSync::$dynsync_table, $values);
 	}
 
 	function add_db_event($table, $message) {
@@ -52,7 +52,7 @@ class BVDynSync {
 		$defaults = array(
 			'_excluded_links'
 		);
-		$ignored_postmeta = $this->bvmain->info->getOption('bvIgnoredPostmeta');
+		$ignored_postmeta = $this->settings->getOption('bvIgnoredPostmeta');
 		if (empty($ignored_postmeta)) {
 			$ignored_postmeta = array();
 		}
@@ -199,7 +199,7 @@ class BVDynSync {
 			'_disqus_sync_lock',
 			'stats_cache'
 		);
-		$ignored_options = $this->bvmain->info->getOption('bvIgnoredOptions');
+		$ignored_options = $this->settings->getOption('bvIgnoredOptions');
 		if (empty($ignored_options)) {
 			$ignored_options = array();
 		}
@@ -235,7 +235,7 @@ class BVDynSync {
 	}
 
 	function theme_action_handler($theme) {
-		$this->add_event('themes', array('theme' => $this->bvmain->info->getOption('stylesheet')));
+		$this->add_event('themes', array('theme' => $this->settings->getOption('stylesheet')));
 	}
 
 	function plugin_action_handler($plugin='') {
@@ -254,7 +254,7 @@ class BVDynSync {
 	function sitemeta_handler($option) {
 		$ping_permitted = $this->get_ping_permission($option);
 		if ($ping_permitted && is_multisite()) {
-			$this->add_db_event('sitemeta', array('site_id' => $this->bvmain->db->getSiteId(), 'meta_key' => $option));
+			$this->add_db_event('sitemeta', array('site_id' => $this->db->getSiteId(), 'meta_key' => $option));
 		}
 		return $ping_permitted;
 	}
@@ -264,9 +264,9 @@ class BVDynSync {
 	function woocommerce_resume_order_handler($order_id) {
 		$this->add_db_event('woocommerce_order_items', array('order_id' => $order_id, 'msg_type' => 'delete'));
 		$meta_ids = array();
-		$itemmeta_table = $this->bvmain->db->getWPTable('woocommerce_order_itemmeta');
-		$items_table = $this->bvmain->db->getWPTable('woocommerce_order_items');
-		foreach( $this->bvmain->db->getResult($this->bvmain->db->prepare("SELECT {$itemmeta_table}.meta_id FROM {$itemmeta_table} INNER JOIN {$items_table} WHERE {$items_table}.order_item_id = {$itemmeta_table}.order_item_id AND {$items_table}.order_id = %d", $order_id)) as $key => $row) {
+		$itemmeta_table = $this->db->getWPTable('woocommerce_order_itemmeta');
+		$items_table = $this->db->getWPTable('woocommerce_order_items');
+		foreach( $this->db->getResult($this->db->prepare("SELECT {$itemmeta_table}.meta_id FROM {$itemmeta_table} INNER JOIN {$items_table} WHERE {$items_table}.order_item_id = {$itemmeta_table}.order_item_id AND {$items_table}.order_id = %d", $order_id)) as $key => $row) {
 			if (!in_array($row->meta_id, $meta_ids, true)) {
 				$meta_ids[] = $row->meta_id;
 				$this->add_db_event('woocommerce_order_itemmeta', array('meta_id' => $row->meta_id, 'msg_type' => 'delete'));
@@ -338,7 +338,7 @@ class BVDynSync {
 	function woocommerce_delete_order_items_handler($postid) {
 		$meta_ids = array();
 		$order_item_ids = array();
-		foreach( $this->bvmain->db->getResult("SELECT {$this->bvmain->db->dbprefix}woocommerce_order_itemmeta.meta_id, {$this->bvmain->db->dbprefix}woocommerce_order_items.order_item_id FROM {$this->bvmain->db->dbprefix}woocommerce_order_items JOIN {$this->bvmain->db->dbprefix}woocommerce_order_itemmeta ON {$this->bvmain->db->dbprefix}woocommerce_order_items.order_item_id = {$this->bvmain->db->dbprefix}woocommerce_order_itemmeta.order_item_id WHERE {$this->bvmain->db->dbprefix}woocommerce_order_items.order_id = '{$postid}'") as $key => $row) {
+		foreach( $this->db->getResult("SELECT {$this->db->dbprefix}woocommerce_order_itemmeta.meta_id, {$this->db->dbprefix}woocommerce_order_items.order_item_id FROM {$this->db->dbprefix}woocommerce_order_items JOIN {$this->db->dbprefix}woocommerce_order_itemmeta ON {$this->db->dbprefix}woocommerce_order_items.order_item_id = {$this->db->dbprefix}woocommerce_order_itemmeta.order_item_id WHERE {$this->db->dbprefix}woocommerce_order_items.order_id = '{$postid}'") as $key => $row) {
 			if (!in_array($row->meta_id, $meta_ids, true)) {
 				$meta_ids[] = $row->meta_id;
 				$this->add_db_event('woocommerce_order_itemmeta', array('meta_id' => $row->meta_id, 'msg_type' => 'delete'));
@@ -514,12 +514,11 @@ class BVDynSync {
 		/* These are applicable only in case of WPMU */
 		/* XNOTE: Handle registration_log_handler from within the server */
 		add_action('wpmu_new_blog', array($this, 'wpmu_new_blog_create_handler'), 10, 1);
-		add_action('refresh_blog_details', array($this, 'wpmu_new_blog_create_handler'), 10, 1);
 		add_action('delete_site_option',array($this, 'sitemeta_handler'), 10, 1);
 		add_action('add_site_option', array($this, 'sitemeta_handler'), 10, 1);
 		add_action('update_site_option', array($this, 'sitemeta_handler'), 10, 1);
 
-		$is_woo_dyn = $this->bvmain->info->getOption('bvWooDynSync');
+		$is_woo_dyn = $this->settings->getOption('bvWooDynSync');
 		if ($is_woo_dyn == 'yes') {
 			add_action('woocommerce_resume_order', array($this, 'woocommerce_resume_order_handler'), 10, 1);
 			add_action('woocommerce_new_order_item', 	array($this, 'woocommerce_new_order_item_handler'), 10, 3);

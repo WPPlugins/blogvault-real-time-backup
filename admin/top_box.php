@@ -1,5 +1,5 @@
 <?php
-	if ($this->bvmain->isMalcare()) {
+	if ($this->bvinfo->isMalcare()) {
 		$mainTitle = "Are you Hacked? Scan Your Website for FREE.";
 		$videoId = "rBuYh2dIadk";
 		$testimonialImg = "/../img/testimonial_mc.png";

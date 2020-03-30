@@ -4,7 +4,7 @@ if (!class_exists('BVIPStore')) :
 
 	class BVIPStore {
 
-		public $bvmain;
+		public $db;
 		public static $name = 'ip_store';
 
 		#TYPE
@@ -15,8 +15,8 @@ if (!class_exists('BVIPStore')) :
 		const FW = 3;
 		const LP = 4;
 
-		function __construct($bvmain) {
-			$this->bvmain = $bvmain;
+		function __construct($db) {
+			$this->db = $db;
 		} 
 
 		function init() {
@@ -24,7 +24,7 @@ if (!class_exists('BVIPStore')) :
 		}
 
 		public function clearConfig() {
-			$this->bvmain->db->dropBVTable(BVIPStore::$name);
+			$this->db->dropBVTable(BVIPStore::$name);
 		}
 
 		public function hasIPv6Support() {
@@ -77,7 +77,7 @@ if (!class_exists('BVIPStore')) :
 		}
 
 		public function checkIPPresent($ip, $type, $category) {
-			$db = $this->bvmain->db;
+			$db = $this->db;
 			$table = $db->getBVTable(BVIPStore::$name);
 			if ($db->isTablePresent($table)) {
 				$binIP = $this->bvInetPton($ip);

@@ -2,10 +2,16 @@
 
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVManageCallback')) :
-class BVManageCallback {
+class BVManageCallback extends BVCallbackBase {
+	public $settings;
+	public $skin;
+
+	public function __construct($callback_handler) {
+		$this->settings = $callback_handler->settings;
+	}
+
 	function getError($err) {
-		global $bvcb;
-		return $bvcb->bvmain->lib->objectToArray($err);
+		return $this->objectToArray($err);
 	}	
 
 	function is_pantheon() {
@@ -137,7 +143,7 @@ class BVManageCallback {
 						$res	= wp_update_user($data);
 					break;
 				case 'delete':
-					if ($args['reassign']) {
+					if (array_key_exists('reassign', $args)) {
 						$user_to = get_user_by('id', $args['reassign']);
 						if ($user_to != false) {
 							$res = wp_delete_user($user->ID, $user_to->ID);
@@ -177,14 +183,14 @@ class BVManageCallback {
 		}
 	}
 
-	function upgrade($params = null) {
+	function upgrade($params = null, $has_bv_skin = false) {
 		$result = array();
 		$premium_upgrades = array();
 		if (array_key_exists('core', $params) && !empty($params['core'])) {
 			$result['core'] = $this->upgradeCore($params['core']);
 		}
 		if (array_key_exists('translations', $params) && !empty($params['translations'])) {
-			$result['translations'] = $this->upgradeTranslations($params['translations']);
+			$result['translations'] = $this->upgradeTranslations($params['translations'], $has_bv_skin);
 		}
 		if (array_key_exists('plugins', $params) && !empty($params['plugins'])) {
 			$files = array();
@@ -192,7 +198,7 @@ class BVManageCallback {
 				$files[] = $plugin['file'];
 			}
 			if (!empty($files)) {
-				$result['plugins'] = $this->upgradePlugins($files);
+				$result['plugins'] = $this->upgradePlugins($files, $has_bv_skin);
 			}
 		}
 		if (array_key_exists('themes', $params) && !empty($params['themes'])) {
@@ -201,18 +207,17 @@ class BVManageCallback {
 				$templates[] = $theme['template'];
 			}
 			if (!empty($templates)) {
-				$result['themes'] = $this->upgradeThemes($templates);
+				$result['themes'] = $this->upgradeThemes($templates, $has_bv_skin);
 			}
 		}
 		return $result;
 	}
 
 	function get_translation_updates() {
-		global $bvcb;
 		$updates = array();
 		$transients = array( 'update_core' => 'core', 'update_plugins' => 'plugin', 'update_themes' => 'theme' );
 		foreach ( $transients as $transient => $type ) {
-			$transient = $bvcb->bvmain->info->getTransient( $transient );
+			$transient = $this->settings->getTransient( $transient );
 			if ( empty( $transient->translations ) )
 				continue;
 
@@ -223,7 +228,7 @@ class BVManageCallback {
 		return $updates;
 	}
 
-	function upgradeTranslations($translations) {
+	function upgradeTranslations($translations, $has_bv_skin = false) {
 		$language_updates = $this->get_translation_updates();
 		$valid_updates = array();
 		$result = array();
@@ -236,9 +241,10 @@ class BVManageCallback {
 		}
 		if (!empty($valid_updates)) {
 			if (class_exists('Language_Pack_Upgrader')) {
-				if (array_key_exists('bvskin', $_REQUEST)) {
+				if ($has_bv_skin) {
 					require_once( "bv_upgrader_skin.php" );
 					$skin = new BVUpgraderSkin("upgrade_translations");
+					$this->skin = $skin;
 				} else {
 					$skin = new Language_Pack_Upgrader_Skin(array());
 				}
@@ -259,15 +265,15 @@ class BVManageCallback {
 	}
 
 	function upgradeCore($args) {
-		global $wp_filesystem, $wp_version, $bvcb, $bvresp;
-		$core = $bvcb->bvmain->info->getTransient('update_core');
+		global $wp_filesystem, $wp_version;
+		$core = $this->settings->getTransient('update_core');
 		$core_update_index = intval($args['coreupdateindex']);
 		if (isset($core->updates) && !empty($core->updates)) {
 			$to_update = $core->updates[$core_update_index];
 		} else {
 			return array('status' => "Error", "message" => "Updates not available");
 		}
-		$bvresp->addStatus("Core_Upgrader", class_exists('Core_Upgrader'));
+		$resp = array("Core_Upgrader", class_exists('Core_Upgrader'));
 		if (version_compare($wp_version, '3.1.9', '>')) {
 			$core   = new Core_Upgrader();
 			$result = $core->upgrade($to_update);
@@ -277,7 +283,7 @@ class BVManageCallback {
 				return array('status' => 'Done');
 			}
 		} else {
-			$bvresp->addStatus("wp_update_core", function_exists('wp_update_core'));
+			$resp = array("wp_update_core", function_exists('wp_update_core'));
 			if (function_exists('wp_update_core')) {
 				$result = wp_update_core($to_update);
 				if (is_wp_error($result)) {
@@ -287,7 +293,7 @@ class BVManageCallback {
 				}
 			}
 
-			$bvresp->addStatus("WP_Upgrader", class_exists('WP_Upgrader'));
+			$resp = array("WP_Upgrader", class_exists('WP_Upgrader'));
 			if (class_exists('WP_Upgrader')) {
 				$upgrader = new WP_Upgrader();
 
@@ -336,12 +342,13 @@ class BVManageCallback {
 		}
 	}
 
-	function upgradePlugins($plugins) {
+	function upgradePlugins($plugins, $has_bv_skin = false) {
 		$result = array();
 		if (class_exists('Plugin_Upgrader')) {
-			if (array_key_exists('bvskin', $_REQUEST)) {
+			if ($has_bv_skin) {
 				require_once( "bv_upgrader_skin.php" );
 				$skin = new BVUpgraderSkin("plugin_upgrade");
+				$this->skin = $skin;
 			} else {
 				$skin = new Bulk_Plugin_Upgrader_Skin();
 			}
@@ -359,12 +366,13 @@ class BVManageCallback {
 		return $result;
 	}
 
-	function upgradeThemes($themes) {
+	function upgradeThemes($themes, $has_bv_skin = false) {
 		$result  = array();
 		if (class_exists('Theme_Upgrader')) {
-			if (array_key_exists('bvskin', $_REQUEST)) {
+			if ($has_bv_skin) {
 				require_once( "bv_upgrader_skin.php" );
 				$skin = new BVUpgraderSkin("theme_upgrade");
+				$this->skin = $skin;
 			} else {
 				$skin = new Bulk_Theme_Upgrader_Skin();
 			}
@@ -382,14 +390,14 @@ class BVManageCallback {
 		return $result;
 	}
 	
-	function install($params) {
+	function install($params, $has_bv_skin = false) {
 		$result = array();
 		if (isset($params['plugins'])) {
 			foreach ($params['plugins'] as $plugin) {
 				if (!array_key_exists('plugins', $result))
 					$result["plugins"] = array();
 				$plugin['dest'] = WP_PLUGIN_DIR;
-				$res = $this->installPackage($plugin);
+				$res = $this->installPackage($plugin, $has_bv_skin);
 				$pluginName = $plugin['package'];
 				$result["plugins"][$pluginName] = $res;
 			}
@@ -399,7 +407,7 @@ class BVManageCallback {
 				if (!array_key_exists('themes', $result))
 					$result["themes"] = array();
 				$theme['dest'] = WP_CONTENT_DIR.'/themes';
-				$res = $this->installPackage($theme);
+				$res = $this->installPackage($theme, $has_bv_skin);
 				$themeName = $theme['package'];
 				$result["themes"][$themeName] = $res;
 			}
@@ -407,7 +415,7 @@ class BVManageCallback {
 		return $result;
 	}
 
-	function installPackage($params) {
+	function installPackage($params, $has_bv_skin = false) {
 		global $wp_filesystem;
 
 		if (!isset($params['package']) || empty($params['package'])) {
@@ -417,9 +425,10 @@ class BVManageCallback {
 		if (preg_match($valid_domain_regex, $params['package']) !== 1) {
 			return array('status' => "Error", 'message' => "Invalid package domain");
 		}
-		if (array_key_exists('bvskin', $_REQUEST)) {
+		if ($has_bv_skin) {
 			require_once( "bv_upgrader_skin.php" );
 			$skin = new BVUpgraderSkin("installer", $params['package']);
+			$this->skin = $skin;
 		} else {
 			$skin = new WP_Upgrader_Skin();
 		}	
@@ -471,46 +480,53 @@ class BVManageCallback {
 		}
 	}
 
-	function process($method) {
-		global $wp_filesystem, $bvresp;
+	function process($request) {
+		global $wp_filesystem;
 		$this->include_files();
 
 		if (!$this->is_pantheon() && !$wp_filesystem) {
 			WP_Filesystem();
 		}
 
-		switch ($method) {
+		$params = $request->params;
+		$resp = array();
+		switch ($request->method) {
 		case "adusr":
-			$bvresp->addStatus("adduser", $this->addUser($_REQUEST['args']));
+			$resp = array("adduser" => $this->addUser($params['args']));
 			break;
 		case "upgrde":
-			$bvresp->addStatus("upgrades", $this->upgrade($_REQUEST['args']));
+			$has_bv_skin = array_key_exists('bvskin', $params);
+			$resp = array("upgrades" => $this->upgrade($params['args'], $has_bv_skin));
 			break;
 		case "edt":
-			$bvresp->addStatus("edit", $this->edit($_REQUEST['args']));
+			$resp = array("edit" => $this->edit($params['args']));
 			break;
 		case "instl":
-			$bvresp->addStatus("install", $this->install($_REQUEST['args']));
+			$has_bv_skin = array_key_exists('bvskin', $params); 
+			$resp = array("install" => $this->install($params['args'], $has_bv_skin));
 			break;
 		case "getpremiumupdates":
-			$bvresp->addStatus("premiumupdates", $this->getPremiumUpdates());
+			$resp = array("premiumupdates" => $this->getPremiumUpdates());
 			break;
 		case "getpremiumupgradesinfo":
-			$bvresp->addStatus("premiumupgradesinfo", $this->getPremiumUpgradesInfo());
+			$resp = array("premiumupgradesinfo" => $this->getPremiumUpgradesInfo());
 			break;
 		case "wrteble":
-			$bvresp->addStatus("writeable", $this->isServerWritable());
+			$resp = array("writeable" => $this->isServerWritable());
 			break;
 		case "atolgn":
 			$isHttps = false;
-			if (array_key_exists('https', $_REQUEST))
+			if (array_key_exists('https', $params))
 				$isHttps = true;
-			$bvresp->addStatus("autologin", $this->autoLogin($_REQUEST['username'], $isHttps));
+			$resp = array("autologin" => $this->autoLogin($params['username'], $isHttps));
 			break;
 		default:
-			return false;
+			$resp = false;
 		}
-		return true;
+		if ($this->skin && is_array($resp)) {
+			$resp = array_merge($resp, $this->skin->status);
+		}
+		return $resp;
 	}
 }
 endif;

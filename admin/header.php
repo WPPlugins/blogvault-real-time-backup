@@ -1,5 +1,5 @@
 <?php
-	if ($this->bvmain->isMalcare()) {
+	if ($this->bvinfo->isMalcare()) {
 		$headerColor = "#4686f5";
 		$pluginSlug = "malcare-security";
 		$headerLogoLink = $this->getWebPage() . "/?utm_source=mc_plugin_lp_logo&utm_medium=logo_link&utm_campaign=mc_plugin_lp_header&utm_term=header_logo&utm_content=image_link";

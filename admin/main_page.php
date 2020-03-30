@@ -3,7 +3,7 @@
 	<?php require_once dirname( __FILE__ ) . "/top_box.php";?>
 </div>
 <div class="mui-container-fluid">
-		<?php $accounts = $this->account->allAccounts();?>
+		<?php $accounts = BVAccount::allAccounts($this->settings);?>
 			<div class="mui-panel" style="width:800px; margin:0 auto;border:1px solid #CCC;">
 				<div class="mui--text-body1" style="text-align:center;font-size:18px;">Accounts associated with this website.</div><br/>
 				<table cellpadding="10" style="width:700px; margin:0 auto;border:1px solid black;">
@@ -30,7 +30,7 @@
 				<?php } ?>
 				</table>
 			<div class="mui-col-md-12 mui-col-md-offset-3" style="padding-top:2%;">
-				<a class="mui-btn mui-btn--raised mui-btn--primary" href=<?php echo $this->bvmain->appUrl(); ?> target="_blank">Visit Dashboard</a>
+				<a class="mui-btn mui-btn--raised mui-btn--primary" href=<?php echo $this->bvinfo->appUrl(); ?> target="_blank">Visit Dashboard</a>
 				<a class="mui-btn mui-btn--raised mui-btn--primary" href=<?php echo $this->mainUrl('&add_account=true'); ?> >Connect New Account</a>
 			</div>
 		</div>

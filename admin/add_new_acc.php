@@ -1,5 +1,5 @@
 <?php
-	if ($this->bvmain->isMalcare()) {
+	if ($this->bvinfo->isMalcare()) {
 		$signupFormTitle = "Let's scan your website";
 		$signupPurpose = array("Malware Scan", "Malware Clean", "Firewall", "Login Protection", "Others");
 		$signupButtonText = "Scan Site";
@@ -19,7 +19,7 @@
 			<?php require_once dirname( __FILE__ ) . "/top_box.php";?>
 			</div>
 			<div class="mui-panel new-account-panel">
-				<form dummy=">" action="<?php echo $this->bvmain->appUrl(); ?>/plugin/bvstart" style="padding-top:10px; margin: 0px;" onsubmit="document.getElementById('get-started').disabled = true;"  method="post" name="signup">
+				<form dummy=">" action="<?php echo $this->bvinfo->appUrl(); ?>/plugin/bvstart" style="padding-top:10px; margin: 0px;" onsubmit="document.getElementById('get-started').disabled = true;"  method="post" name="signup">
 					<div style="width: 800px; margin: 0 auto; padding: 10px;">
 					<div class="mui--text-title form-title"><?php echo $signupFormTitle; ?></div>
 						<input type='hidden' name='bvsrc' value='wpplugin' />
@@ -41,7 +41,7 @@
 			</div>
 		</div>
 		<div class="mui-col-md-2 side">
-			<?php if ($this->bvmain->isBlogvault()) { ?>
+			<?php if ($this->bvinfo->isBlogvault()) { ?>
 			<div class="side-box" style="margin: 0px !important;">
 				<h2 class="side-box-title">Why choose BlogVault ?</h2>
 				<strong>

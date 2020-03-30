@@ -1,8 +1,8 @@
 <?php
 
 if (!defined('ABSPATH')) exit;
-if (!class_exists('BVRequest')) :
-class BVRequest {
+if (!class_exists('BVWPRequest')) :
+class BVWPRequest {
   private $fileNames;
   private $files;
   private $headers;
@@ -17,6 +17,8 @@ class BVRequest {
 	private $cookies;
 	private $respcode;
 	private $status;
+	private $rulesInfo;
+	private $reqInfo;
 
 	#status
  	const ALLOWED  = 1;
@@ -35,17 +37,19 @@ class BVRequest {
 		$method = '';
 		$path = '';
 		$this->ip = $ip;
-		$this->setRespCode(200);
-		$this->setCategory(BVRequest::NORMAL);
-		$this->setStatus(BVRequest::ALLOWED);
+		$this->rulesInfo = array();
+		$this->reqInfo = array();
+		$this->setRespCode(0);
+		$this->setCategory(BVWPRequest::NORMAL);
+		$this->setStatus(BVWpRequest::ALLOWED);
 		$this->setTimestamp(time());
-		$this->setQueryString(BVRequest::removeMagicQuotes($_GET));
-		$this->setCookies(BVRequest::removeMagicQuotes($_COOKIE));
-		$this->setBody(BVRequest::removeMagicQuotes($_POST));
-		$this->setFiles(BVRequest::removeMagicQuotes($_FILES));
+		$this->setQueryString(BVWPRequest::removeMagicQuotes($_GET));
+		$this->setCookies(BVWPRequest::removeMagicQuotes($_COOKIE));
+		$this->setBody(BVWPRequest::removeMagicQuotes($_POST));
+		$this->setFiles(BVWPRequest::removeMagicQuotes($_FILES));
 		if (!empty($_FILES)) {
 			foreach ($_FILES as $input => $file) {
-				$fileNames[$input] = BVRequest::removeMagicQuotes($file['name']);
+				$fileNames[$input] = BVWPRequest::removeMagicQuotes($file['name']);
 			}
 		}
 		$this->setFileNames($fileNames);
@@ -56,30 +60,30 @@ class BVRequest {
 					$header = str_replace(array(' ', '_'), array('', ' '), $header);
 					$header = ucwords(strtolower($header));
 					$header = str_replace(' ', '-', $header);
-					$headers[$header] = BVRequest::removeMagicQuotes($value);
+					$headers[$header] = BVWPRequest::removeMagicQuotes($value);
 				}
 			}
 			if (array_key_exists('CONTENT_TYPE', $_SERVER)) {
-				$headers['Content-Type'] = BVRequest::removeMagicQuotes($_SERVER['CONTENT_TYPE']);
+				$headers['Content-Type'] = BVWPRequest::removeMagicQuotes($_SERVER['CONTENT_TYPE']);
 			}
 			if (array_key_exists('CONTENT_LENGTH', $_SERVER)) {
-				$headers['Content-Length'] = BVRequest::removeMagicQuotes($_SERVER['CONTENT_LENGTH']);
+				$headers['Content-Length'] = BVWPRequest::removeMagicQuotes($_SERVER['CONTENT_LENGTH']);
 			}
 			if (array_key_exists('REFERER', $_SERVER)) {
-				$headers['Referer'] = BVRequest::removeMagicQuotes($_SERVER['REFERER']);
+				$headers['Referer'] = BVWPRequest::removeMagicQuotes($_SERVER['REFERER']);
 			}
 			if (array_key_exists('HTTP_USER_AGENT', $_SERVER)) {
-				$headers['User-Agent'] = BVRequest::removeMagicQuotes($_SERVER['HTTP_USER_AGENT']);
+				$headers['User-Agent'] = BVWPRequest::removeMagicQuotes($_SERVER['HTTP_USER_AGENT']);
 			}
 
 			if (array_key_exists('Host', $headers)) {
 				$host = $headers['Host'];
 			} else if (array_key_exists('SERVER_NAME', $_SERVER)) {
-				$host = BVRequest::removeMagicQuotes($_SERVER['SERVER_NAME']);
+				$host = BVWPRequest::removeMagicQuotes($_SERVER['SERVER_NAME']);
 			}
 
-			$method = array_key_exists('REQUEST_METHOD', $_SERVER) ? BVRequest::removeMagicQuotes($_SERVER['REQUEST_METHOD']) : 'GET';
-			$uri = array_key_exists('REQUEST_URI', $_SERVER) ? BVRequest::removeMagicQuotes($_SERVER['REQUEST_URI']) : '';
+			$method = array_key_exists('REQUEST_METHOD', $_SERVER) ? BVWPRequest::removeMagicQuotes($_SERVER['REQUEST_METHOD']) : 'GET';
+			$uri = array_key_exists('REQUEST_URI', $_SERVER) ? BVWPRequest::removeMagicQuotes($_SERVER['REQUEST_URI']) : '';
 			$_uri = parse_url($uri);
 			$path = (is_array($_uri) && array_key_exists('path', $_uri)) ? $_uri['path']  : $uri;
 		}
@@ -89,7 +93,7 @@ class BVRequest {
 		$this->setUri($uri);
 		$this->setPath($path);
 	}
-	
+
 	public function setStatus($status) {
 		$this->status = $status;
 	}
@@ -149,7 +153,25 @@ class BVRequest {
 	public function setUri($uri) {
 		$this->uri = $uri;
 	}
+
+	public function updateRulesInfo($key, $value) {
+		$this->rulesInfo[$key] = $value;
+	}
 	
+	public function getRulesInfo() {
+		return $this->rulesInfo;
+	}
+
+	public function updateReqInfo($info) {
+		if (is_array($info)) {
+			$this->reqInfo = $this->reqInfo + $info;
+		}
+	}
+
+	public function getReqInfo() {
+		return $this->reqInfo;
+	}
+
 	public function getStatus() {
 		return $this->status;
 	}
@@ -166,10 +188,16 @@ class BVRequest {
 	}
 
 	public function getDataToLog() {
-		$querystr = maybe_serialize($this->getQueryString());
-		$querystr = (strlen($querystr) > 512) ? maybe_serialize(array("bv_over_size" => true)) : $querystr;
 		$referer = $this->getHeader('Referer') ? $this->getHeader('Referer') : '';
 		$user_agent = $this->getHeader('User-Agent') ? $this->getHeader('User-Agent') : '';
+		$rules_info = maybe_serialize($this->getRulesInfo());
+		$req_info = maybe_serialize($this->getReqInfo());
+		if (strlen($req_info) > 16000) {
+			$req_info = maybe_serialize(array("keys" => array_keys($this->getReqInfo())));
+			if (strlen($req_info) > 16000) {
+				$req_info = maybe_serialize(array("bv_over_size" => true));
+			}
+		}
 		$data = array(
 			"path"         => $this->getPath(),
 			"filenames"    => maybe_serialize($this->getFileNames()),
@@ -177,12 +205,13 @@ class BVRequest {
 			"time"         => $this->getTimeStamp(),
 			"ip"           => $this->getIP(),
 			"method"       => $this->getMethod(),
-			"query_string" => $querystr,
+			"query_string" => $req_info,
 			"user_agent"   => $user_agent,
 			"resp_code"    => $this->getRespCode(),
 			"referer"      => $referer,
 			"status"       => $this->getStatus(),
-			"category"     => $this->getCategory()
+			"category"     => $this->getCategory(),
+			"rules_info"   => $rules_info
 		);
 		return $data;
 	}
@@ -278,7 +307,7 @@ class BVRequest {
 
 	public static function removeMagicQuotes($value) {
 		if (function_exists("get_magic_quotes_gpc") && get_magic_quotes_gpc()) {
-			return BVRequest::removeSlashesRecursively($value);
+			return BVWPRequest::removeSlashesRecursively($value);
 		}
 		return $value;
 	}
