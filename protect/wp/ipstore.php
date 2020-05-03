@@ -76,6 +76,23 @@ if (!class_exists('BVIPStore')) :
 			return false;
 		}
 
+		public function isLPIPBlacklisted($ip) {
+			return $this->checkIPPresent($ip, BVIPStore::BLACKLISTED, BVIPStore::LP);
+		}
+
+		public function isLPIPWhitelisted($ip) {
+			return $this->checkIPPresent($ip, BVIPStore::WHITELISTED, BVIPStore::LP);
+		}
+
+
+		public function isFWIPBlacklisted($ip) {
+			return $this->checkIPPresent($ip, BVIPStore::BLACKLISTED, BVIPStore::FW);
+		}
+
+		public function isFWIPWhitelisted($ip) {
+			return $this->checkIPPresent($ip, BVIPStore::WHITELISTED, BVIPStore::FW);
+		}
+
 		public function checkIPPresent($ip, $type, $category) {
 			$db = $this->db;
 			$table = $db->getBVTable(BVIPStore::$name);

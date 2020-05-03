@@ -8,6 +8,8 @@ class BVFSCallback extends BVCallbackBase {
 	public $stream;
 	public $account;
 
+	public static $cwAllowedFiles = array(".htaccess", ".user.ini", "malcare-waf.php");
+
 	public function __construct($callback_handler) {
 		$this->account = $callback_handler->account;
 	}
@@ -149,6 +151,34 @@ class BVFSCallback extends BVCallbackBase {
 		return $md5;
 	}
 
+	function getFilesContent($files, $withContent = true) {
+		$result = array();
+		foreach ($files as $file) {
+			$fdata = $this->fileStat($file);
+			$absfile = ABSPATH.$file;
+
+			if (is_dir($absfile) && !is_link($absfile)) {
+				$fdata['is_dir'] = true;
+			} else {
+				if (!is_readable($file)) {
+					$fdata['error'] = 'file not readable';
+				} else {
+					if ($withContent === true) {
+						if ($content = file_get_contents($absfile)) {
+							$fdata['content'] = $content;
+						} else {
+							$fdata['error'] = 'unable to read file';
+						}
+					}
+				}
+			}
+
+			$result[$file] = $fdata;
+		}
+
+		return $result;
+	}
+
 	function getFilesStats($files, $offset = 0, $limit = 0, $bsize = 102400, $md5 = false) {
 		$result = array();
 		foreach ($files as $file) {
@@ -207,6 +237,9 @@ class BVFSCallback extends BVCallbackBase {
 	function process($request) {
 		$params = $request->params;
 		$stream_init_info = BVStream::startStream($this->account, $request);
+		
+		
+
 		if (array_key_exists('stream', $stream_init_info)) {
 			$this->stream = $stream_init_info['stream'];
 			switch ($request->method) {
@@ -263,6 +296,26 @@ class BVFSCallback extends BVCallbackBase {
 				}
 				$directoryList = glob($initdir.$regex, $glob_option);
 				$resp = $this->getFilesStats($directoryList);
+				break;
+			case "dirsexists":
+				$resp = array();
+				$dirs = $params['dirs'];
+
+				foreach ($dirs as $dir) {
+					$path = ABSPATH.$dir;
+					if (file_exists($path) && is_dir($path) && !is_link($path)) {
+						$resp[$dir] = true;
+					} else {
+						$resp[$dir] = false;
+					}
+				}
+
+				$resp["status"] = "Done";
+				break;
+			case "gtfilescntent":
+				$files = $params['files'];
+				$withContent = array_key_exists('withcontent', $params) ? $params['withcontent'] : true;
+				$resp = array("files_content" => $this->getFilesContent($files, $withContent));
 				break;
 			default:
 				$resp = false;

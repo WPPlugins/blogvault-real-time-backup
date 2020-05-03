@@ -3,7 +3,6 @@
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVWPLP')) :
 	
-require_once dirname( __FILE__ ) . '/config.php';
 
 class BVWPLP {
 	public $db;
@@ -33,11 +32,11 @@ class BVWPLP {
 	const BYPASSED     = 6;
 	const ALLOWED      = 7;
 	
-	public function __construct($db, $settings, $ip, $ipstore) {
+	public function __construct($db, $settings, $ip, $ipstore, $confHash) {
 		$this->db = $db;
 		$this->settings = $settings;
 		$this->ip = $ip;
-		$this->config = new BVWPLPConfig($db, $settings);
+		$this->config = new BVWPLPConfig($confHash);
 		$this->ipstore = $ipstore;
 		$this->logger = new BVLogger($db, BVWPLPConfig::$requests_table);
 		$this->time = strtotime(date("Y-m-d H:i:s"));
@@ -81,15 +80,15 @@ class BVWPLP {
 	}
 
 	public function getCaptchaLimit() {
-		return $this->config->getCaptchaLimit();
+		return $this->config->captchaLimit;
 	}
 
 	public function getTempBlockLimit() {
-		return $this->config->getTempBlockLimit();
+		return $this->config->tempBlockLimit;
 	}
 
 	public function getBlockAllLimit() {
-		return $this->config->getBlockAllLimit();
+		return $this->config->blockAllLimit;
 	}
 
 	public function getLoginLogsTable() {
@@ -107,7 +106,7 @@ class BVWPLP {
 
 	public function terminateTemplate() {
 		$info = new BVInfo($this->settings);
-		$brandname = $info->getBrandName();
+		$brandname = $info->getBrandName().' Firewall';
 		$templates = array (
 			1 => "<p>Too many failed attempts, You are barred from logging into this site.</p><a href=".$this->getCaptchaLink()." 
 					class='btn btn-default'>Click here</a> to unblock yourself.",
@@ -119,7 +118,7 @@ class BVWPLP {
 			return "
 			<div style='height: 98vh;'>
 				<div style='text-align: center; padding: 10% 0; font-family: Arial, Helvetica, sans-serif;'>
-					<div><p><img src=".plugins_url('/../../img/icon.png', __FILE__)."><h2>Login Protection</h2><h3>powered by</h3><h2>"
+					<div><p><img src=".plugins_url('/../../../img/icon.png', __FILE__)."><h2>Login Protection</h2><h3>powered by</h3><h2>"
 							.$brandname."</h2></p><div>
 					<p>" . $templates[$this->getCategory()]. "</p>
 				</div>
@@ -127,19 +126,19 @@ class BVWPLP {
 	}
 
 	public function isProtecting() {
-		return ($this->config->getMode() === BVWPLPConfig::PROTECT);
+		return ($this->config->mode === BVWPLPConfig::PROTECT);
 	}
 
 	public function isActive() {
-		return ($this->config->getMode() !== BVWPLPConfig::DISABLED);
+		return ($this->config->mode !== BVWPLPConfig::DISABLED);
 	}
 
 	public function isBlacklistedIP() {
-		return $this->ipstore->checkIPPresent($this->ip, BVIPStore::BLACKLISTED, BVIPStore::LP);
+		return $this->ipstore->isLPIPBlacklisted($this->ip);
 	}
 
 	public function isWhitelistedIP() {
-		return $this->ipstore->checkIPPresent($this->ip, BVIPStore::WHITELISTED, BVIPStore::LP);
+		return $this->ipstore->isLPIPWhitelisted($this->ip);
 	}
 
 	public function isUnBlockedIP() {

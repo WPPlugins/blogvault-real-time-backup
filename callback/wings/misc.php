@@ -23,9 +23,9 @@ class BVMiscCallback extends BVCallbackBase {
 		switch ($request->method) {
 		case "dummyping":
 			$resp = array();
-			$resp = array_merge($resp, $this->siteinfo->respInfo());
-			$resp = array_merge($resp, $this->account->respInfo());
-			$resp = array_merge($resp, $this->bvinfo->respInfo());
+			$resp = array_merge($resp, $this->siteinfo->info());
+			$resp = array_merge($resp, $this->account->info());
+			$resp = array_merge($resp, $this->bvinfo->info());
 			break;
 		case "enablebadge":
 			$option = $bvinfo->badgeinfo;
@@ -52,14 +52,6 @@ class BVMiscCallback extends BVCallbackBase {
 			$settings->deleteOption('bvdynplug');
 			$resp = array("unsetdynplug" => $settings->getOption('bvdynplug'));
 			break;
-		case "setptplug":
-			$settings->updateOption('bvptplug', $params['ptplug']);
-			$resp = array("setptplug" => $settings->getOption('bvptplug'));
-			break;
-		case "unsetptplug":
-			$settings->deleteOption('bvptlug');
-			$resp = array("unsetptplug" => $settings->getOption('bvptlug'));
-			break;
 		case "wpupplgs":
 			$resp = array("wpupdateplugins" => wp_update_plugins());
 			break;
@@ -68,10 +60,6 @@ class BVMiscCallback extends BVCallbackBase {
 			break;
 		case "wpupcre":
 			$resp = array("wpupdatecore" => wp_version_check());
-			break;
-		case "rmmonitime":
-    	$this->settings->deleteOption('bvmonittime');
-			$resp = array("rmmonitime" => !$bvinfo->getMonitTime());
 			break;
 		case "phpinfo":
 			phpinfo();

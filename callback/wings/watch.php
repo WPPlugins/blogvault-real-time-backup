@@ -1,9 +1,9 @@
 <?php
 
 if (!defined('ABSPATH')) exit;
-if (!class_exists('BVMonitCallback')) :
+if (!class_exists('BVWatchCallback')) :
 
-class BVMonitCallback extends BVCallbackBase {
+class BVWatchCallback extends BVCallbackBase {
 	public $db;
 	public $settings;
 
@@ -31,20 +31,65 @@ class BVMonitCallback extends BVCallbackBase {
 		return $this->db->deleteBVTableContent($name, $filter);
 	}
 
-  public function setMonitTime() {
-    return $this->settings->updateOption('bvmonittime', time());
+	public function setWatchTime() {
+		return $this->settings->updateOption('bvwatchtime', time());
+	}
+
+	public function getFWPrependLog($params) {
+		$result = array();
+		$fname = $params['fname'];
+		$limit = intval($params['limit']);
+
+		if (file_exists($fname)) {
+
+			$result['exists'] = true;
+			$tmpfname = $fname."tmp";
+
+			if (!@rename($fname, $tmpfname)) {
+
+				$result = array('status' => 'Error', 'message' => 'UNABLE_TO_RENAME_LOGFILE');
+
+			} else {
+
+				if (file_exists($tmpfname)) {
+
+					$fsize = filesize($tmpfname);
+					$result["size"] = $fsize;
+
+					if ($fsize <= $limit) {
+
+						$result['content'] = file_get_contents($tmpfname);
+
+					} else {
+						$handle = fopen($tmpfname, "rb");
+						$result['content'] = fread($handle, $limit);
+						$result['incomplete'] = true;
+						fclose($handle);
+					}
+
+					$result['tmpfile'] = unlink($tmpfname);
+				} else {
+					$result['tmpfile'] = 'DOES_NOT_EXISTS';
+				}
+
+			}
+		}
+
+		return $result;
 	}
 
 	public function process($request) {
 		$db = $this->db;
 		$settings = $this->settings;
-		$this->setMonitTime();
+		$this->setWatchTime();
 		$params = $request->params;
+
 		switch ($request->method) {
 		case "getdata":
 			$resp = array();
+
 			if (array_key_exists('lp', $params)) {
-				require_once dirname( __FILE__ ) . '/../../protect/wp_lp/config.php';
+				require_once dirname( __FILE__ ) . '/../../protect/wp/lp/config.php';
 				$lp_params = $params['lp'];
 				$limit = intval(urldecode($lp_params['limit']));
 				$filter = urldecode($lp_params['filter']);
@@ -52,15 +97,22 @@ class BVMonitCallback extends BVCallbackBase {
 				$table = $db->getBVTable(BVWPLPConfig::$requests_table);
 				$resp["lplogs"] = $this->getData($table, $limit, $filter);
 			}
+
+			if (array_key_exists('prelog', $params)) {
+				$prelog_params = $params['prelog'];
+				$resp["prelog"] = $this->getFWPrependLog($prelog_params);
+			}
+
 			if (array_key_exists('fw', $params)) {
-				require_once dirname( __FILE__ ) . '/../../protect/wp_fw/config.php';
+				require_once dirname( __FILE__ ) . '/../../protect/fw/config.php';
 				$fw_params = $params['fw'];
 				$limit = intval(urldecode($fw_params['limit']));
 				$filter = urldecode($fw_params['filter']);
-				$db->deleteBVTableContent(BVWPFWConfig::$requests_table, $fw_params['rmfilter']);
-				$table = $db->getBVTable(BVWPFWConfig::$requests_table);
+				$db->deleteBVTableContent(BVFWConfig::$requests_table, $fw_params['rmfilter']);
+				$table = $db->getBVTable(BVFWConfig::$requests_table);
 				$resp["fwlogs"] = $this->getData($table, $limit, $filter);
 			}
+
 			if (array_key_exists('dynevent', $params)) {
 				require_once dirname( __FILE__ ) . '/../../wp_dynsync.php';
 				$isdynsyncactive = $settings->getOption('bvDynSyncActive');
@@ -76,6 +128,7 @@ class BVMonitCallback extends BVCallbackBase {
 					$resp["status"] = true;
 				}
 			}
+
 			$resp["status"] = "done";
 			break;
 		case "rmdata":

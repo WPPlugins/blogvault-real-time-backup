@@ -3,7 +3,7 @@
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVIPStoreCallback')) :
 
-require_once dirname( __FILE__ ) . '/../../protect/ipstore.php';
+require_once dirname( __FILE__ ) . '/../../protect/wp/ipstore.php';
 
 class BVIPStoreCallback extends BVCallbackBase {
 	public $db;
@@ -87,9 +87,8 @@ class BVIPStoreCallback extends BVCallbackBase {
 			case "insrtips":
 				$values = $params['values'];
 				$fields = $params['fields'];
-				$rmfilter = $params['rmfilter'];
-				if ($rmfilter) {
-					$db->deleteBVTableContent($table, $rmfilter);
+				if (array_key_exists('rmfilter', $params)) {
+					$db->deleteBVTableContent($table, $params['rmfilter']);
 				}
 				$this->insertIPs($bvTable, $fields, $values);
 				$resp = array("offset" => $this->getIPStoreOffset($bvTable, $auto_increment_offset));

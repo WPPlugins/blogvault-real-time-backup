@@ -7,10 +7,12 @@ class BVWPAdmin {
 	public $settings;
 	public $siteinfo;
 	public $bvinfo;
+	public $bvapi;
 
-	function __construct($settings, $siteinfo) {
+	function __construct($settings, $siteinfo, $bvapi) {
 		$this->settings = $settings;
 		$this->siteinfo = $siteinfo;
+		$this->bvapi = $bvapi;
 		$this->bvinfo = new BVInfo($this->settings);
 	}
 
@@ -19,6 +21,13 @@ class BVWPAdmin {
 			return network_admin_url('admin.php?page='.$this->bvinfo->plugname.$_params);
 		} else {
 			return admin_url('admin.php?page='.$this->bvinfo->plugname.$_params);
+		}
+	}
+
+	function removeAdminNotices() {
+		if (array_key_exists('page', $_REQUEST) && $_REQUEST['page'] == $this->bvinfo->plugname) {
+			remove_all_actions('admin_notices');
+			remove_all_actions('all_admin_notices');
 		}
 	}
 
@@ -50,8 +59,9 @@ class BVWPAdmin {
 		$brand = $this->bvinfo->getBrandInfo();
 		if (!$brand || (!array_key_exists('hide', $brand) && !array_key_exists('hide_from_menu', $brand))) {
 			$bname = $this->bvinfo->getBrandName();
+			$icon = $this->bvinfo->getBrandIcon();
 			add_menu_page($bname, $bname, 'manage_options', $this->bvinfo->plugname,
-					array($this, 'adminPage'), plugins_url('img/icon.png',  __FILE__ ));
+					array($this, 'adminPage'), plugins_url($icon,  __FILE__ ));
 		}
 	}
 
@@ -133,6 +143,9 @@ class BVWPAdmin {
 		wp_enqueue_style( 'bvsurface', plugins_url('css/bvmui.min.css', __FILE__));
 		wp_enqueue_style( 'bvplugin', plugins_url('css/bvplugin.min.css', __FILE__));
 		if (isset($_REQUEST['bvnonce']) && wp_verify_nonce( $_REQUEST['bvnonce'], 'bvnonce' )) {
+			$info = array();
+			$this->siteinfo->basic($info);
+			$this->bvapi->pingbv('/bvapi/disconnect', $info, $_REQUEST['pubkey']);
 			BVAccount::remove($this->settings, $_REQUEST['pubkey']);
 		}
 		require_once dirname( __FILE__ ) . '/admin/header.php';

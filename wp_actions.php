@@ -36,8 +36,7 @@ if (!class_exists('BVWPAction')) :
 		}
 
 		public static function uninstall() {
-			do_action('clear_lp_config');
-			do_action('clear_fw_config');
+			do_action('clear_pt_config');
 			do_action('clear_ip_store');
 		 	do_action('clear_dynsync_config');
 		}

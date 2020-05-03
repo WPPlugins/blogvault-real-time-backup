@@ -21,7 +21,7 @@ class BVAccountCallback extends BVCallbackBase {
 			$resp = array("status" => BVAccount::exists($this->settings, $params['public']));
 			break;
 		case "rmacc":
-			$resp = array("status" => $account->remove($params['public']));
+			$resp = array("status" => BVAccount::remove($this->settings, $params['public']));
 			break;
 		case "updt":
 			$info = array();
@@ -32,7 +32,8 @@ class BVAccountCallback extends BVCallbackBase {
 			$resp = array("status" => BVAccount::exists($this->settings, $params['pubkey']));
 			break;
 		case "updtapikey":
-			$resp = array("status" => BVAccount::updateApiPublicKey($this->settings, $params['pubkey']));
+			BVAccount::updateApiPublicKey($this->settings, $params['pubkey']);
+			$resp = array("status" => $this->settings->getOption(BVAccount::$api_public_key));
 			break;
 		case "rmdefsec":
 			$resp = array("status" => $settings->deleteOption('bvDefaultSecret'));
