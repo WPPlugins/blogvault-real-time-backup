@@ -102,7 +102,7 @@ if (!class_exists('BVAccount')) :
 		}
 
 		public function newAuthParams($version) {
-			$bvinfo = new BVInfo($settings);
+			$bvinfo = new BVInfo($this->settings);
 			$args = array();
 			$time = time();
 			$sig = sha1($this->public.$this->secret.$time.$version);
