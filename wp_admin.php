@@ -9,10 +9,10 @@ class BVWPAdmin {
 	public $bvinfo;
 	public $bvapi;
 
-	function __construct($settings, $siteinfo, $bvapi) {
+	function __construct($settings, $siteinfo, $bvapi = null) {
 		$this->settings = $settings;
 		$this->siteinfo = $siteinfo;
-		$this->bvapi = $bvapi;
+		$this->bvapi = new BVWPAPI($settings);
 		$this->bvinfo = new BVInfo($this->settings);
 	}
 

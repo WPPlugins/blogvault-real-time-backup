@@ -269,17 +269,6 @@ class BVFSWriteCallback extends BVCallbackBase {
 		return $result;
 	}
 
-	public function wgetFile($ifile_url, $ofile) {
-		$result = array();
-		system("wget -nv -O $ofile $ifile_url 2>&1 > /dev/null", $retval);
-
-		if ($retval !== 0) {
-			$result['error'] = "WGET_ERROR";
-		}
-
-		return $result;
-	}
-
 	public function streamCopyFile($ifile_url, $ofile) {
 		$result = array();
 		$handle = fopen($ifile_url, "rb");
@@ -378,11 +367,6 @@ class BVFSWriteCallback extends BVCallbackBase {
 			$ifile_url = isset($params['ifileurl']) ? $params['ifileurl'] : null;
 
 			$resp = $this->curlFile($ifile_url, $ofile, $timeout);
-			break;
-		case "wget":
-			$ifile_url = isset($params['ifileurl']) ? $params['ifileurl'] : null;
-
-			$resp = $this->wgetFile($ifile_url, $ofile);
 			break;
 		case "streamcopy":
 			$ifile_url = isset($params['ifileurl']) ? $params['ifileurl'] : null;
