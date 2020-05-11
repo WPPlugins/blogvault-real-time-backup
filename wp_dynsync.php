@@ -427,6 +427,67 @@ class BVWPDynSync {
 		$this->add_db_event('woocommerce_attribute_taxonomies', array('attribute_id' => $id));
 	}
 
+	function woocommerce_note_created_handler($note_id) {
+		$this->add_db_event('wc_admin_notes', array('note_id' => $note_id));
+		$this->add_db_event('wc_admin_note_actions', array('note_id' => $note_id));
+	}
+
+	function woocommerce_note_modification_handler($note_id) {
+		if (current_filter() == 'wooocommerce_note_deleted')
+			$msg_type = 'delete';
+		else
+			$msg_type = 'edit';
+		$this->add_db_event('wc_admin_notes', array('note_id' => $note_id, 'msg_type' => $msg_type));
+		$this->add_db_event('wc_admin_note_actions', array('note_id' => $note_id, 'msg_type' => $msg_type));
+	}
+
+	function woocommerce_analytics_order_stats_modification_handler($order_id) {
+		if (current_filter() == 'woocommerce_analytics_delete_order_stats')
+			$msg_type = 'delete';
+		else
+			$msg_type = 'edit';
+		$this->add_db_event('wc_order_stats', array('order_id' => $order_id, 'msg_type' => $msg_type));
+	}
+
+	function woocommerce_analytics_product_update_handler($order_item_id, $order_id) {
+		$this->add_db_event('wc_order_product_lookup', array('order_item_id' => $order_item_id, 'msg_type' => 'edit'));
+	}
+
+	function woocommerce_analytics_product_delete_handler($order_item_id, $order_id) {
+		$this->add_db_event('wc_order_product_lookup', array('order_id' => $order_id, 'msg_type' => 'delete'));
+	}
+
+	function woocommerce_analytics_new_customer_handler($customer_id) {
+		$this->add_db_event('wc_customer_lookup', array('customer_id' => $customer_id));
+	}
+
+	function woocommerce_analytics_customer_modification_handler($customer_id) {
+		if (current_filter() == 'woocommerce_analytics_delete_customer')
+			$msg_type = 'delete';
+		else
+			$msg_type = 'edit';
+		$this->add_db_event('wc_customer_lookup', array('customer_id' => $customer_id, 'msg_type' => $msg_type));
+	}
+
+	function woocommerce_analytics_coupon_update_handler($coupon_id, $order_id) {
+		$this->add_db_event('wc_order_coupon_lookup', array('coupon_id' => $coupon_id, 'order_id' => $order_id, 'msg_type' => 'edit'));
+	}
+
+	function woocommerce_analytics_coupon_delete_handler($coupon_id, $order_id) {
+		$this->add_db_event('wc_order_coupon_lookup', array('order_id' => $order_id, 'msg_type' => 'delete'));
+	}
+
+	function woocommerce_analytics_tax_update_handler($tax_rate_id, $order_id) {
+		$this->add_db_event('wc_order_tax_lookup', array('tax_rate_id' => $tax_rate_id, 'order_id' => $order_id, 'msg_type' => 'edit'));
+	}
+
+	function woocommerce_analytics_tax_delete_handler($tax_rate_id, $order_id) {
+		$this->add_db_event('wc_order_tax_lookup', array('order_id' => $order_id, 'msg_type' => 'delete'));
+	}
+
+	function woocommerce_product_update_handler($product_id) {
+		$this->add_db_event('wc_product_meta_lookup', array('product_id' => $product_id, 'msg_type' => 'edit'));
+	}
 
 	/* ADDING ACTION AND LISTENERS FOR CAPTURING EVENTS. */
 	public function add_actions_and_listeners() {
@@ -555,7 +616,6 @@ class BVWPDynSync {
 			add_action('updated_payment_token_meta', array($this, 'woocommerce_payment_token_meta_handler'), 10, 4);
 			add_action('deleted_payment_token_meta', array($this, 'woocommerce_payment_token_meta_handler'), 10, 4);
 
-
 			add_action('woocommerce_shipping_zone_method_added', array($this, 'woocommerce_shipping_zone_method_added_handler'), 10, 3);
 			add_action('woocommerce_shipping_zone_method_status_toggled', array($this, 'woocommerce_shipping_zone_method_status_toggled_handler'), 10, 4);
 			add_action('woocommerce_shipping_zone_method_deleted', array($this, 'woocommerce_shipping_zone_method_deleted_handler'), 10, 3);
@@ -565,6 +625,30 @@ class BVWPDynSync {
 
 			add_action('woocommerce_api_create_product_attribute', array($this, 'woocommerce_api_product_attribute_handler'), 10, 2);
 			add_action('woocommerce_api_edit_product_attribute', array($this, 'woocommerce_api_product_attribute_handler'), 10, 2);
+
+			add_action('woocommerce_note_created', array($this, 'woocommerce_note_created_handler'), 10, 1);
+			add_action('woocommerce_note_updated', array($this, 'woocommerce_note_modification_handler'), 10, 1);
+			add_action('woocommerce_note_deleted', array($this, 'woocommerce_note_modification_handler'), 10, 1);
+
+			add_action('woocommerce_analytics_update_order_stats', array($this, 'woocommerce_analytics_order_stats_modification_handler'), 10, 1);
+			add_action('woocommerce_analytics_delete_order_stats', array($this, 'woocommerce_analytics_order_stats_modification_handler'), 10, 1);
+
+			add_action('woocommerce_analytics_update_product', array($this, 'woocommerce_analytics_product_update_handler'), 10, 2);
+			add_action('woocommerce_analytics_delete_product', array($this, 'woocommerce_analytics_product_delete_handler'), 10, 2);
+
+			add_action('woocommerce_analytics_new_customer', array($this, 'woocommerce_analytics_new_customer_handler'), 10, 1);
+			add_action('woocommerce_analytics_update_customer', array($this, 'woocommerce_analytics_customer_modification_handler'), 10, 1);
+			add_action('woocommerce_analytics_delete_customer', array($this, 'woocommerce_analytics_customer_modification_handler'), 10, 1);
+
+			add_action('woocommerce_analytics_update_coupon', array($this, 'woocommerce_analytics_coupon_update_handler'), 10, 2);
+			add_action('woocommerce_analytics_delete_coupon', array($this, 'woocommerce_analytics_coupon_delete_handler'), 10, 2);
+
+			add_action('woocommerce_analytics_update_tax', array($this, 'woocommerce_analytics_tax_update_handler'), 10, 2);
+			add_action('woocommerce_analytics_delete_tax', array($this, 'woocommerce_analytics_tax_delete_handler'), 10, 2);
+
+			add_action('woocommerce_updated_product_stock', array($this, 'woocommerce_product_update_handler'), 10, 1);
+			add_action('woocommerce_updated_product_sales', array($this, 'woocommerce_product_update_handler'), 10, 1);
+			add_action('woocommerce_updated_product_price', array($this, 'woocommerce_product_update_handler'), 10, 1);
 		}
 	}
 }
