@@ -9,7 +9,7 @@ if (!class_exists('BVInfo')) :
 		public $badgeinfo = 'bvbadge';
 		public $ip_header_option = 'bvipheader';
 		public $brand_option = 'bvbrand';
-		public $version = '4.25';
+		public $version = '4.26';
 		public $webpage = 'https://blogvault.net';
 		public $appurl = 'https://app.blogvault.net';
 		public $slug = 'blogvault-real-time-backup/blogvault.php';

@@ -19,10 +19,7 @@ class BVMiscCallback extends BVCallbackBase {
 	public function refreshPluginUpdates() {
 		global $wp_current_filter;
 		$wp_current_filter[] = 'load-update-core.php';
-		if (function_exists('wp_clean_update_cache')) {
-			wp_clean_update_cache();
-		}
-
+	
 		wp_update_plugins();
 
 		array_pop($wp_current_filter);
@@ -35,9 +32,6 @@ class BVMiscCallback extends BVCallbackBase {
 	public function refreshThemeUpdates() {
 		global $wp_current_filter;
 		$wp_current_filter[] = 'load-update-core.php';
-		if (function_exists('wp_clean_update_cache')) {
-			wp_clean_update_cache();
-		}
 
 		wp_update_themes();
 
