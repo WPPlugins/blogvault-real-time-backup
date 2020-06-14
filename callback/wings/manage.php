@@ -40,6 +40,7 @@ class BVManageCallback extends BVCallbackBase {
 		@include_once ABSPATH.'wp-admin/includes/class-wp-upgrader.php';
 		@include_once ABSPATH.'wp-admin/includes/user.php';
 		@include_once ABSPATH.'wp-includes/registration.php';
+		@include_once ABSPATH.'wp-admin/includes/upgrade.php';
 		@include_once ABSPATH.'wp-admin/includes/update.php';
 		@require_once ABSPATH.'wp-admin/includes/update-core.php';
 	}
@@ -202,12 +203,12 @@ class BVManageCallback extends BVCallbackBase {
 			}
 		}
 		if (array_key_exists('themes', $params) && !empty($params['themes'])) {
-			$templates = array();
+			$stylesheets = array();
 			foreach ($params['themes'] as $theme) {
-				$templates[] = $theme['template'];
+				$stylesheets[] = $theme['stylesheet'];
 			}
-			if (!empty($templates)) {
-				$result['themes'] = $this->upgradeThemes($templates, $has_bv_skin);
+			if (!empty($stylesheets)) {
+				$result['themes'] = $this->upgradeThemes($stylesheets, $has_bv_skin);
 			}
 		}
 		return $result;
@@ -379,12 +380,12 @@ class BVManageCallback extends BVCallbackBase {
 			$upgrader = new Theme_Upgrader($skin);
 			$result   = $upgrader->bulk_upgrade($themes);
 		}
-		foreach($themes as $template) {
-			$res = $result[$template];
+		foreach($themes as $stylesheet) {
+			$res = $result[$stylesheet];
 			if (!$res || is_wp_error($res)) {
-				$result[$template] = array('status' => "Error");
+				$result[$stylesheet] = array('status' => "Error");
 			} else {
-				$result[$template] = array('status' => "Done");
+				$result[$stylesheet] = array('status' => "Done");
 			}
 		}
 		return $result;
@@ -480,6 +481,15 @@ class BVManageCallback extends BVCallbackBase {
 		}
 	}
 
+	function upgrade_db(){
+		if (function_exists('wp_upgrade')) {
+				wp_upgrade();
+				return "DONE";
+			} else {
+				return "NOUPGRADERFUNCTION";
+			}
+	}
+
 	function process($request) {
 		global $wp_filesystem;
 		$this->include_files();
@@ -519,6 +529,9 @@ class BVManageCallback extends BVCallbackBase {
 			if (array_key_exists('https', $params))
 				$isHttps = true;
 			$resp = array("autologin" => $this->autoLogin($params['username'], $isHttps));
+			break;
+		case "updatedb":
+			$resp = array("status" => $this->upgrade_db());
 			break;
 		default:
 			$resp = false;

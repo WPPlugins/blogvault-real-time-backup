@@ -94,6 +94,9 @@ class BVMiscCallback extends BVCallbackBase {
 		case "dlttrsnt":
 			$resp = array("dlttrsnt" => $settings->deleteTransient($params['key']));
 			break;
+		case "setmanulsignup":
+			$resp = array("setmanulsignup" => $settings->updateOption("bvmanualsignup", true));
+			break;
 		default:
 			$resp = false;
 		}

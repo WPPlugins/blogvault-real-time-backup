@@ -91,11 +91,6 @@ class BVWPLP {
 		return $this->config->blockAllLimit;
 	}
 
-	public function getLoginLogsTable() {
-		global $bvdb;
-		return $bvdb->getBVTable(BVWPLP::$requests_table);
-	}
-
 	public function getAllowLoginsTransient() {
 		return $this->settings->getTransient('bvlp_allow_logins');
 	}

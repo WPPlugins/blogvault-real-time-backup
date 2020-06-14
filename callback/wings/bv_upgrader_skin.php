@@ -55,9 +55,18 @@ class BVUpgraderSkin extends WP_Upgrader_Skin {
 		$this->status[$this->action.':'.$key][] = $message;
 	}
 
-	function feedback($string) {
+	function feedback($string, ...$args) {
 		if ( empty($string) )
 			return;
+
+		if ( strpos( $string, '%' ) !== false ) {
+			if ( $args ) {
+				$args   = array_map( 'strip_tags', $args );
+				$args   = array_map( 'esc_html', $args );
+				$string = vsprintf( $string, $args );
+			}
+		}
+
 		$key = $this->get_key();
 		$message = array();
 		$message['message'] = $string;

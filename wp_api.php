@@ -11,19 +11,21 @@ if (!class_exists('BVWPAPI')) :
 
 		public function pingbv($method, $body, $public = false) {
 			if ($public) {
-				$this->create_request_params($method, $body, $public);
+				$this->do_request($method, $body, $public);
 			} else {
 				$api_public_key = $this->settings->getOption('bvApiPublic');
 				if (!empty($api_public_key) && (strlen($api_public_key) >= 32)) {
-					$this->create_request_params($method, $body, $api_public_key);
+					$this->do_request($method, $body, $api_public_key);
 				}
 			}
 		}
 
-		public function create_request_params($method, $body, $pubkey) {
+		public function do_request($method, $body, $pubkey) {
 			$account = BVAccount::find($this->settings, $pubkey);
-			$url = $account->authenticatedUrl($method);
-			$this->http_request($url, $body);
+			if (isset($account)) {
+				$url = $account->authenticatedUrl($method);
+				$this->http_request($url, $body);
+			}
 		}
 
 		public function http_request($url, $body, $headers = array()) {

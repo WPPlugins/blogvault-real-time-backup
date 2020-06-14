@@ -9,7 +9,7 @@ if (!class_exists('BVInfo')) :
 		public $badgeinfo = 'bvbadge';
 		public $ip_header_option = 'bvipheader';
 		public $brand_option = 'bvbrand';
-		public $version = '4.26';
+		public $version = '4.31';
 		public $webpage = 'https://blogvault.net';
 		public $appurl = 'https://app.blogvault.net';
 		public $slug = 'blogvault-real-time-backup/blogvault.php';
@@ -21,8 +21,8 @@ if (!class_exists('BVInfo')) :
 			$this->settings = $settings;
 		}
 
-		public function canOverrideCW() {
-			$scanOption = $this->settings->getOption('bvoverridecw');
+		public function isManualSignup() {
+			$scanOption = $this->settings->getOption('bvmanualsignup');
 			return (isset($scanOption) && $scanOption == 1);
 		}
 

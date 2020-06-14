@@ -135,6 +135,7 @@ class BVInfoCallback extends BVCallbackBase {
 			'charset' => get_bloginfo('charset'),
 			'wpversion' => $wp_version,
 			'dbversion' => $wp_db_version,
+			'mysql_version' => $db->getMysqlVersion(),
 			'abspath' => ABSPATH,
 			'bvpluginpath' => defined('BVBASEPATH') ? BVBASEPATH : null,
 			'uploadpath' => $upload_dir['basedir'],

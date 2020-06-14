@@ -182,5 +182,10 @@ class BVWPDb {
 
 		return $result;
 	}
+
+	public function getMysqlVersion() {
+		global $wpdb;
+		return $wpdb->db_version();
+	}
 }
 endif;
