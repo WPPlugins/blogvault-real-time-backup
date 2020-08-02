@@ -483,11 +483,11 @@ class BVManageCallback extends BVCallbackBase {
 
 	function upgrade_db(){
 		if (function_exists('wp_upgrade')) {
-				wp_upgrade();
-				return "DONE";
-			} else {
-				return "NOUPGRADERFUNCTION";
-			}
+			wp_upgrade();
+			return "DONE";
+		} else {
+			return "NOUPGRADERFUNCTION";
+		}
 	}
 
 	function process($request) {

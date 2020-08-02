@@ -4,9 +4,9 @@ Tags: backup, wordpress backup, backup plugin, cloud backup, database backup, ba
 Plugin URI: https://blogvault.net/
 Donate link: https://app.blogvault.net/home/signup
 Requires at least: 4.0
-Tested up to: 5.4
+Tested up to: 5.5
 Requires PHP: 5.4.0
-Stable tag: 4.31
+Stable tag: 4.35
 License: GPLv2 or later
 License URI: [http://www.gnu.org/licenses/gpl-2.0.html](http://www.gnu.org/licenses/gpl-2.0.html)
 
@@ -240,6 +240,9 @@ Thank you. We really appreciate these kind words, and it makes our day. We would
 9. We power WordPress migration for WPEngine, Pantheon, FlyWheel, LiquidWeb, Cloudways, Savvii and many more. Need we say more?
 
 == CHANGELOG ==
+= 4.35 =
+* Improved scanfiles and filelist api
+
 = 4.31 =
 * Update Database after wp-core update
 * Handling Child theme updates better code

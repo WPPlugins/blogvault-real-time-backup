@@ -5,7 +5,7 @@ Plugin URI: https://blogvault.net
 Description: Easiest way to backup & secure your WordPress site
 Author: Backup by BlogVault
 Author URI: https://blogvault.net
-Version: 4.31
+Version: 4.35
 Network: True
  */
 
