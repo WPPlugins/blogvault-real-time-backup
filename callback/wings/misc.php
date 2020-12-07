@@ -97,6 +97,9 @@ class BVMiscCallback extends BVCallbackBase {
 		case "setmanulsignup":
 			$resp = array("setmanulsignup" => $settings->updateOption("bvmanualsignup", true));
 			break;
+		case "setbvss":
+			$resp = array("status" => $settings->updateOption('bv_site_settings', $params['bv_site_settings']));
+			break;
 		default:
 			$resp = false;
 		}

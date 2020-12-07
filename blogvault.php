@@ -5,7 +5,7 @@ Plugin URI: https://blogvault.net
 Description: Easiest way to backup & secure your WordPress site
 Author: Backup by BlogVault
 Author URI: https://blogvault.net
-Version: 4.35
+Version: 4.36
 Network: True
  */
 
@@ -140,6 +140,27 @@ if ((array_key_exists('bvplugname', $_REQUEST)) && ($_REQUEST['bvplugname'] == "
 		require_once dirname( __FILE__ ) . '/wp_dynsync.php';
 		$dynsync = new BVWPDynSync($bvdb, $bvsettings);
 		$dynsync->init();
+	}
+
+	$bv_site_settings = $bvsettings->getOption('bv_site_settings');
+	if (isset($bv_site_settings)) {
+		if (isset($bv_site_settings['wp_auto_updates'])) {
+			$wp_auto_updates = $bv_site_settings['wp_auto_updates'];
+			if (array_key_exists('block_auto_update_core', $wp_auto_updates)) {
+				add_filter('auto_update_core', '__return_false' );
+			}
+			if (array_key_exists('block_auto_update_theme', $wp_auto_updates)) {
+				add_filter('auto_update_theme', '__return_false' );
+				add_filter('themes_auto_update_enabled', '__return_false' );
+			}
+			if (array_key_exists('block_auto_update_plugin', $wp_auto_updates)) {
+				add_filter('auto_update_plugin', '__return_false' );
+				add_filter('plugins_auto_update_enabled', '__return_false' );
+			}
+			if (array_key_exists('block_auto_update_translation', $wp_auto_updates)) {
+				add_filter('auto_update_translation', '__return_false' );
+			}
+		}
 	}
 
 }

@@ -4,9 +4,9 @@ Tags: backup, wordpress backup, backup plugin, cloud backup, database backup, ba
 Plugin URI: https://blogvault.net/
 Donate link: https://app.blogvault.net/home/signup
 Requires at least: 4.0
-Tested up to: 5.5
+Tested up to: 5.6
 Requires PHP: 5.4.0
-Stable tag: 4.35
+Stable tag: 4.36
 License: GPLv2 or later
 License URI: [http://www.gnu.org/licenses/gpl-2.0.html](http://www.gnu.org/licenses/gpl-2.0.html)
 
@@ -96,6 +96,10 @@ BlogVault offers an unrestricted 7 days free trial. **Explore all features of fu
 == FREQUENTLY ASKED QUESTIONS ==
 
 =Can I Setup my BlogVault backup account myself?=
+This plugin works in tandem with the [BlogVault](https://blogvault.net) servers. BlogVault servers do all the heavy processing and will alert you if your site has any issues.
+
+This requires an account with BlogVault to be created to use the plugin.
+
 Yes. Take the help of this **[step-by-step guide](http://bit.ly/2RJg9sv)**.
 
 =I am unable to reach the backup plugin. What can I do?=
@@ -227,6 +231,9 @@ We are happy to accept all feature requests for our products and services. Simpl
 =Very happy with the service and want to give you guys a review. Where do I do it?=
 Thank you. We really appreciate these kind words, and it makes our day. We would love it if you could review our service **[here](http://bit.ly/2RKkko2)**.
 
+=Where can I find BlogVault Terms of Use and Privacy Policy?=
+These are available on our website: [Terms of Service](https://blogvault.net/tos/) and [Privacy Policy](https://blogvault.net/privacy/)
+
 == SCREENSHOTS ==
 
 1. BlogVault provides you a comprehensive History page that lets you manage all your WordPress backups with ease.
@@ -240,7 +247,8 @@ Thank you. We really appreciate these kind words, and it makes our day. We would
 9. We power WordPress migration for WPEngine, Pantheon, FlyWheel, LiquidWeb, Cloudways, Savvii and many more. Need we say more?
 
 == CHANGELOG ==
-= 4.35 =
+= 4.36 =
+* Block WordPress auto update feature
 * Improved scanfiles and filelist api
 
 = 4.31 =

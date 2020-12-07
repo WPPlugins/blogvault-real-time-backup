@@ -210,7 +210,7 @@ class BVWPDynSync {
 		$ping_permitted = true;
 		$ignored_options = $this->get_ignored_options();
 		foreach($ignored_options as $val) {
-			if ($val{0} == '/') {
+			if ($val[0] == '/') {
 				if (preg_match($val, $option_name))
 					$ping_permitted = false;
 			} else {
