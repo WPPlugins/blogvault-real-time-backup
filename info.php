@@ -4,26 +4,39 @@ if (!defined('ABSPATH')) exit;
 if (!class_exists('BVInfo')) :
 	class BVInfo {
 		public $settings;
+		public $config;
 		public $plugname = 'bvbackup';
 		public $brandname = 'BlogVault';
 		public $badgeinfo = 'bvbadge';
 		public $ip_header_option = 'bvipheader';
 		public $brand_option = 'bvbrand';
-		public $version = '4.36';
+		public $version = '4.54';
 		public $webpage = 'https://blogvault.net';
 		public $appurl = 'https://app.blogvault.net';
 		public $slug = 'blogvault-real-time-backup/blogvault.php';
 		public $plug_redirect = 'bvredirect';
 		public $logo = '../img/bvlogo.png';
 		public $brand_icon = '/img/icon.png';
+		public $services_option_name = 'bvconfig';
 
 		public function __construct($settings) {
 			$this->settings = $settings;
+			$this->config = $this->settings->getOption($this->services_option_name);
 		}
 
-		public function isManualSignup() {
-			$scanOption = $this->settings->getOption('bvmanualsignup');
-			return (isset($scanOption) && $scanOption == 1);
+		public function canSetCWBranding() {
+			if (BVWPSiteInfo::isCWServer()) {
+
+				$bot_protect_accounts = BVAccount::accountsByType($this->settings, 'botprotect');
+				if (sizeof($bot_protect_accounts) >= 1)
+					return true;
+
+				$bot_protect_accounts = BVAccount::accountsByPattern($this->settings, 'email', '/@cw_user\.com$/');
+				if (sizeof($bot_protect_accounts) >= 1)
+					return true;
+			}
+
+			return false;
 		}
 
 		public function getBrandInfo() {
@@ -77,6 +90,14 @@ if (!class_exists('BVInfo')) :
 		public function isDynSyncModuleEnabled() {
 			return ($this->settings->getOption('bvdynplug') === $this->plugname) &&
 				$this->isActivePlugin();
+		}
+
+		public function isServiceActive($service) {
+			$bvconfig = $this->config;
+			if ($bvconfig && array_key_exists('services', $bvconfig)) {
+				return in_array($service, $bvconfig['services']) && $this->isActivePlugin();
+			}
+			return false;
 		}
 
 		public function isActivateRedirectSet() {

@@ -35,7 +35,7 @@ class BVFSWriteCallback extends BVCallbackBase {
 		return $result;
 	}
 
-	public function makeDirs($dirs) {
+	public function makeDirs($dirs, $permissions = 0777, $recursive = true) {
 		$result = array();
 
 		foreach($dirs as $dir) {
@@ -53,7 +53,7 @@ class BVFSWriteCallback extends BVCallbackBase {
 
 			} else {
 
-				$dir_result['status'] = mkdir($dir);
+				$dir_result['status'] = mkdir($dir, $permissions, $recursive);
 				if ($dir_result['status'] === false) {
 					$dir_result['error'] = "MKDIR_FAILED";
 				}
@@ -411,7 +411,7 @@ class BVFSWriteCallback extends BVCallbackBase {
 			$resp = $this->doChmod($params['pathinfos']);
 			break;
 		case "mkdr":
-			$resp = $this->makeDirs($params['dirs']);
+			$resp = $this->makeDirs($params['dirs'], $params['permissions'], $params['recursive']);
 			break;
 		case "rmdr":
 			$resp = $this->removeDirs($params['dirs']);
