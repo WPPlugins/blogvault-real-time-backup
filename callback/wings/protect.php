@@ -64,18 +64,6 @@ class BVProtectCallback extends BVCallbackBase {
 			}
 			$resp["hdrsinfo"] = $hdrsinfo;
 			break;
-		case "gtptcnf":
-			$resp = array('conf' => $this->settings->getOption('bvptconf'));
-			break;
-		case "clrcnf":
-			$this->settings->deleteOption('bvptconf');
-			$this->settings->deleteOption('bvptplug');
-			$resp = array("clearconfig" => true);
-			break;
-		case "docnf":
-			$this->settings->updateOption('bvptconf', $params['conf']);
-			$resp = array('conf' => $this->settings->getOption('bvptconf'));
-			break;
 		case "gtrulcnf":
 			$resp = array('conf' => $this->settings->getOption('bvruleset'));
 			break;
@@ -93,14 +81,6 @@ class BVProtectCallback extends BVCallbackBase {
 			break;
 		case "svrcnf":
 			$resp = array("serverconfig" => $this->serverConfig());
-			break;
-		case "setptplug":
-			$this->settings->updateOption('bvptplug', $params['ptplug']);
-			$resp = array("setptplug" => $this->settings->getOption('bvptplug'));
-			break;
-		case "unsetptplug":
-			$this->settings->deleteOption('bvptlug');
-			$resp = array("unsetptplug" => $this->settings->getOption('bvptlug'));
 			break;
 		case "unblklogins":
 			$resp = array("unblocklogins" => $this->unBlockLogins());

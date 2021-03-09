@@ -174,7 +174,7 @@ class BVFW {
 		}
 	}
 
-	public function terminateRequest($category = BVWPRequest::NORMAL) {
+	public function terminateRequest($category) {
 		$this->request->setCategory($category);
 		$this->request->setStatus(BVWPRequest::BLOCKED);
 		$this->request->setRespCode(403);
@@ -188,6 +188,7 @@ class BVFW {
 					<div style='text-align: center; padding: 10% 0; font-family: Arial, Helvetica, sans-serif;'>
 						<div><p>$brandname</p></div>
 						<p>Blocked because of Malicious Activities</p>
+						<p>Reference ID: " . $this->request->getRequestID() . "</p>
 					</div>
 				</div>
 			");
@@ -403,13 +404,13 @@ class BVFW {
 			switch ($action["type"]) {
 			case "ALLOW":
 				$this->break_rule_evaluation = true;
+				$this->request->setCategory(BVWPRequest::RULE_ALLOWED);
 				return;
 			case "BLOCK":
-				$this->terminateRequest(BVWPRequest::BLACKLISTED);
+				$this->terminateRequest(BVWPRequest::RULE_BLOCKED);
 				return;
 			case "INSPECT":
-				//TODO
-				//call_user_func_array(array($this, "profileRequestInfo"), $this->ruleEvaluator->getArgs($action["args"]));
+				$this->inspectRequest();
 				break;
 			case "DEBUG":
 				//TODO
@@ -422,6 +423,34 @@ class BVFW {
 				break;
 			}
 		}
+	}
+
+	public function inspectRequest() {
+		$this->request->updateRulesInfo('inspect', "headers", $this->request->getHeaders());
+		$this->request->updateRulesInfo('inspect', "getParams", $this->request->getGetParams());
+		$this->request->updateRulesInfo('inspect', "postParams", $this->getPostParamsToLog($this->request->getPostParams()));
+		$this->request->updateRulesInfo('inspect', "cookies", $this->request->getCookies());
+	}
+
+	function getPostParamsToLog($params) {
+		$result = array();
+		if (is_array($params)) {
+			foreach ($params as $key => $value) {
+				if (is_array($value)) {
+					$result[$key] = $this->getPostParamsToLog($value);
+				} else {
+					$valsize = $this->getLength($value);
+					if ($valsize > 1024) {
+						$result[$key] = "Data too long: {$valsize}";
+					} elseif (!$this->canLogValue($key)) {
+						$result[$key] = "Sensitive Data";
+					} else {
+						$result[$key] = $value;
+					}
+				}
+			}
+		}
+		return $result;
 	}
 }
 endif;

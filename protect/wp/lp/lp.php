@@ -116,6 +116,7 @@ class BVWPLP {
 					<div><p><img src=".plugins_url('/../../../img/icon.png', __FILE__)."><h2>Login Protection</h2><h3>powered by</h3><h2>"
 							.$brandname."</h2></p><div>
 					<p>" . $templates[$this->getCategory()]. "</p>
+					<p>Reference ID: " . BVInfo::getRequestID() . "</p>
 				</div>
 			</div>";
 	}
@@ -161,6 +162,7 @@ class BVWPLP {
 			"time" => $this->time,
 			"category" => $this->getCategory(),
 			"username" => $this->getUserName(),
+			"request_id" => BVInfo::getRequestID(),
 			"message" => $this->getMessage());
 		$this->logger->log($data);
 	}

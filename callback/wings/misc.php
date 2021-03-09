@@ -106,8 +106,22 @@ class BVMiscCallback extends BVCallbackBase {
 			$resp = array("status" => $settings->updateOption('bv_site_settings', $params['bv_site_settings']));
 			break;
 		case "stsrvcs":
-			$settings->updateOption($bvinfo->services_option_name, $params['services']);
-			$resp = array("stsrvcs" => $settings->getOption($bvinfo->services_option_name));
+			$resp = array();
+			$deleted_configs = array();
+			$updated_configs = array();
+			if (array_key_exists("configs_to_delete", $params)) {
+				foreach($params["configs_to_delete"] as $config_name) {
+					$deleted_configs[$config_name] = $settings->deleteOption($config_name);
+				}
+			}
+			if (array_key_exists("configs_to_update", $params)) {
+				foreach($params["configs_to_update"] as $config_name => $config_value) {
+					$settings->updateOption($config_name, $config_value);
+					$updated_configs[$config_name] = $settings->getOption($config_name);
+				}
+			}
+			$resp["updated_configs"] = $updated_configs;
+			$resp["deleted_configs"] = $deleted_configs;
 			break;
 		default:
 			$resp = false;

@@ -183,7 +183,7 @@ if (!class_exists('BVAccount')) :
 			}
 			$this->sig_match = self::getSigMatch($request, $this->secret);
 			if ($this->sig_match !== $request->sig) {
-				return $sig_match;
+				return false;
 			}
 			$this->settings->updateOption('bvLastRecvTime', $time);
 			return 1;

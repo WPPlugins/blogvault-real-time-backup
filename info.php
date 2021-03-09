@@ -10,7 +10,7 @@ if (!class_exists('BVInfo')) :
 		public $badgeinfo = 'bvbadge';
 		public $ip_header_option = 'bvipheader';
 		public $brand_option = 'bvbrand';
-		public $version = '4.54';
+		public $version = '4.55';
 		public $webpage = 'https://blogvault.net';
 		public $appurl = 'https://app.blogvault.net';
 		public $slug = 'blogvault-real-time-backup/blogvault.php';
@@ -19,9 +19,30 @@ if (!class_exists('BVInfo')) :
 		public $brand_icon = '/img/icon.png';
 		public $services_option_name = 'bvconfig';
 
+		const DB_VERSION = '2';
+
 		public function __construct($settings) {
 			$this->settings = $settings;
 			$this->config = $this->settings->getOption($this->services_option_name);
+		}
+
+		public function getCurrentDBVersion() {
+			$bvconfig = $this->config;
+			if ($bvconfig && array_key_exists('db_version', $bvconfig)) {
+				return $bvconfig['db_version'];
+			}
+			return false;
+		}
+
+		public function hasValidDBVersion() {
+			return BVInfo::DB_VERSION === $this->getCurrentDBVersion();
+		}
+
+		public static function getRequestID() {
+			if (!defined("BV_REQUEST_ID")) {
+				define("BV_REQUEST_ID", uniqid(mt_rand()));
+			}
+			return BV_REQUEST_ID;
 		}
 
 		public function canSetCWBranding() {
@@ -83,8 +104,7 @@ if (!class_exists('BVInfo')) :
 		}
 
 		public function isProtectModuleEnabled() {
-			return ($this->settings->getOption('bvptplug') === $this->plugname) &&
-				$this->isActivePlugin();
+			return $this->isServiceActive("protect");
 		}
 
 		public function isDynSyncModuleEnabled() {

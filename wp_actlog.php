@@ -14,7 +14,7 @@ if (!class_exists('BVWPActLog')) :
 			$this->db = $db;
 			$this->settings = $settings;
 			$this->bvinfo = $info;
-			$this->request_id = BVAccount::randString(16);
+			$this->request_id = BVInfo::getRequestID();
 			$this->ip_header = array_key_exists('ip_header', $config) ? $config['ip_header'] : false;
 		}
 
@@ -40,6 +40,7 @@ if (!class_exists('BVWPActLog')) :
 			$data = array('id' => $comment_id);
 			if (!empty($comment)) {
 				$data['author'] = $comment->comment_author;
+				$data['post_id'] = $comment->comment_post_ID;
 			}
 			return $data;
 		}
@@ -75,6 +76,54 @@ if (!class_exists('BVWPActLog')) :
 			return $data;
 		}
 
+		function wc_get_attribute($attribute_id, $attribute_data = null) {
+			$data = array('id' => $attribute_id);
+			if (!is_null($attribute_data) && is_array($attribute_data)) {
+				$data['name'] = $attribute_data['attribute_label'];
+				$data['slug'] = $attribute_data['attribute_name'];
+			} else {
+				$attribute = wc_get_attribute($attribute_id);
+				if (!empty($attribute)) {
+					$data['name'] = $attribute->name;
+					$data['slug'] = substr($attribute->slug, 3);
+				}
+			}
+			return $data;
+		}
+
+		function wc_get_tax_rate($tax_rate_id, $tax_rate) {
+			$data = array('id' => $tax_rate_id);
+			if (!empty($tax_rate)) {
+				$data['name'] = array_key_exists('tax_rate_name', $tax_rate) ? $tax_rate['tax_rate_name'] : '';
+				$data['country'] = array_key_exists('tax_rate_country', $tax_rate) ? $tax_rate['tax_rate_country'] : '';
+				$data['rate'] = array_key_exists('tax_rate', $tax_rate) ? $tax_rate['tax_rate'] : '';
+			}
+			return $data;
+		}
+
+		function get_ip($ipHeader) {
+			$ip = '127.0.0.1';
+			if ($ipHeader && is_array($ipHeader)) {
+				if (array_key_exists($ipHeader['hdr'], $_SERVER)) {
+					$_ips = preg_split("/(,| |\t)/", $_SERVER[$ipHeader['hdr']]);
+					if (array_key_exists(intval($ipHeader['pos']), $_ips)) {
+						$ip = $_ips[intval($ipHeader['pos'])];
+					}
+				}
+			} else if (array_key_exists('REMOTE_ADDR', $_SERVER)) {
+				$ip = $_SERVER['REMOTE_ADDR'];
+			}
+
+			$ip = trim($ip);
+			if (preg_match('/^\[([0-9a-fA-F:]+)\](:[0-9]+)$/', $ip, $matches)) {
+				$ip = $matches[1];
+			} elseif (preg_match('/^([0-9.]+)(:[0-9]+)$/', $ip, $matches)) {
+				$ip = $matches[1];
+			}
+
+			return $ip;
+		}
+
 		function add_activity($event_data) {
 			$user = wp_get_current_user();
 			$values = array();
@@ -84,7 +133,7 @@ if (!class_exists('BVWPActLog')) :
 			}
 			$values["request_id"] = $this->request_id;
 			$values["site_id"] = get_current_blog_id();
-			$values["ip"] = BVProtectBase::getIP($this->ip_header);
+			$values["ip"] = $this->get_ip($this->ip_header);
 			$values["event_type"] = current_filter();
 			$values["event_data"] = maybe_serialize($event_data);
 			$values["time"] = time();
@@ -111,7 +160,7 @@ if (!class_exists('BVWPActLog')) :
 
 		function comment_handler($comment_id) {
 			$comment = $this->get_comment($comment_id);
-			$post = $this->get_post($comment->comment_post_ID);
+			$post = $this->get_post($comment['post_id']);
 			$event_data = array(
 				"comment" => $comment,
 				"post" => $post
@@ -132,18 +181,28 @@ if (!class_exists('BVWPActLog')) :
 
 		function post_handler($post_id) {
 			$post = $this->get_post($post_id);
-			$event_data = array(
-				"post" => $post
-			);
+			$event_data = array();
+			if ($post["type"] === "product") {
+				$event_data["product"] = $post;
+			} elseif ($post["type"] === "shop_order") {
+				$event_data["order"] = $post;
+			} else {
+				$event_data["post"] = $post;
+			}
 			$this->add_activity($event_data);
 		}
 
 		function post_saved_handler($post_id, $post, $update) {
 			$post = $this->get_post($post_id);
-			$event_data = array(
-				"post" => $post,
-				"updated" => $update
-			);
+			$event_data = array();
+			if ($post["type"] === "product") {
+				$event_data["product"] = $post;
+			} elseif ($post["type"] === "shop_order") {
+				$event_data["order"] = $post;
+			} else {
+				$event_data["post"] = $post;
+			}
+			$event_data["updated"] = $update;
 			$this->add_activity($event_data);
 		}
 
@@ -158,8 +217,8 @@ if (!class_exists('BVWPActLog')) :
 		function term_updation_handler($data, $term_id) {
 			$term = $this->get_term($term_id);
 			$event_data = array(
-				"old_term" => $term,
-				"term" => $data
+				"term" => $term,
+				"new_term" => $data
 			);
 			$this->add_activity($event_data);
 			return $data;
@@ -207,10 +266,149 @@ if (!class_exists('BVWPActLog')) :
 			$this->add_activity($event_data);
 		}
 
-		function mu_delete_handler($blog) {
+		function mu_site_handler($blog) {
 			$event_data = array(
 				"blog" => $this->get_blog($blog->blog_id)
 			);
+			$this->add_activity($event_data);
+		}
+
+		function woocommerce_attribute_created_handler($attribute_id, $attribute_data) {
+			$event_data = array(
+				"attribute" => $this->wc_get_attribute($attribute_id, $attribute_data)
+			);
+			$this->add_activity($event_data);
+		}
+
+		function woocommerce_attribute_handler($attribute_id) {
+			$event_data = array(
+				"attribute" => $this->wc_get_attribute($attribute_id)
+			);
+			$this->add_activity($event_data);
+		}
+
+		function woocommerce_tax_rate_handler($tax_rate_id, $tax_rate) {
+			$event_data = array(
+				"tax_rate" => $this->wc_get_tax_rate($tax_rate_id, $tax_rate)
+			);
+			$this->add_activity($event_data);
+		}
+
+		function woocommerce_tax_rate_deleted_handler($tax_rate_id) {
+			$event_data = array(
+				"tax_rate" => array("id" => $tax_rate_id)
+			);
+			$this->add_activity($event_data);
+		}
+
+		function woocommerce_grant_product_download_access_handler($data) {
+			$event_data = array(
+				"download_id" => $data['download_id'],
+				"user_id" => $data['user_id'],
+				"order_id" => $data['order_id'],
+				"product_id" => $data['product_id']
+			);
+			$this->add_activity($event_data);
+		}
+
+		function woocommerce_revoke_access_to_product_download_handler($download_id, $product_id, $order_id) {
+			$event_data = array(
+				"download_id" => $download_id,
+				"product_id" => $product_id,
+				"order_id" => $order_id
+			);
+			$this->add_activity($event_data);
+		}
+
+		function woocommerce_shipping_zone_method_handler($instance_id, $method_id, $zone_id) {
+			$event_data = array(
+				"instance_id" => absint ($instance_id),
+				"method_id" => $method_id,
+				"zone_id" => $zone_id
+			);
+			$this->add_activity($event_data);
+		}
+
+		function get_plugin_update_data($plugins) {
+			$data = array();
+			if (!empty($plugins) && defined('WP_PLUGIN_DIR')) {
+				foreach ($plugins as $plugin) {
+					$plugin_data = get_plugin_data(WP_PLUGIN_DIR . '/' . $plugin);
+					$install_data = array('title' => $plugin_data['Name'], 'version' => $plugin_data['Version']);
+					array_push($data, $install_data);
+				}
+			}
+			return $data;
+		}
+
+		function get_theme_update_data($themes) {
+			$data = array();
+			if (!empty($themes)) {
+				foreach ($themes as $theme) {
+					$theme_data = wp_get_theme($theme);
+					$install_data = array('title' => $theme_data['Name'], 'version' => $theme_data['Version']);
+					array_push($data, $install_data);
+				}
+			}
+			return $data;
+		}
+
+		function get_plugin_install_data($upgrader) {
+			$data = array();
+			if ($upgrader->bulk != "1") {
+				$plugin_data = $upgrader->new_plugin_data;
+				$install_data = array('title' => $plugin_data['Name'], 'version' => $plugin_data['Version']);
+				array_push($data, $install_data);
+			}
+			return $data;
+		}
+
+		function get_theme_install_data($upgrader) {
+			$data = array();
+			$theme_data = $upgrader->new_theme_data;
+			$install_data = array('title' => $theme_data['Name'], 'version' => $theme_data['Version']);
+			array_push($data, $install_data);
+			return $data;
+		}
+
+		function get_update_data($options) {
+			global $wp_version;
+			$event_data = array('action' => 'update');
+			if ($options['type'] === 'plugin') {
+				$event_data['type'] = 'plugin';
+				$event_data['plugins'] = $this->get_plugin_update_data($options['plugins']);
+			}
+			else if ($options['type'] === 'theme') {
+				$event_data['type'] = 'theme';
+				$event_data['themes'] = $this->get_theme_update_data($options['themes']);
+			}
+			else if ($options['type'] === 'core') {
+				$event_data['type'] = 'core';
+				$event_data['wp_core'] = array('prev_version' => $wp_version);
+			}
+			return $event_data;
+		}
+
+		function get_install_data($upgrader, $options) {
+			$event_data = array('action' => 'install');
+			if ($options['type'] === 'plugin') {
+				$event_data['type'] = 'plugin';
+				$event_data['plugins'] = $this->get_plugin_install_data($upgrader);
+			}
+			else if ($options['type'] === 'theme') {
+				$event_data['type'] = 'theme';
+				$event_data['themes'] = $this->get_theme_install_data($upgrader);
+			}
+			return $event_data;
+		}
+
+		function upgrade_handler($upgrader, $data) {
+			$event_data = array();
+			if ($data['action'] === 'update') {
+				$event_data = $this->get_update_data($data);
+			} else if ($data['action'] === 'install') {
+				$event_data = $this->get_install_data($upgrader, $data);
+			}
 			$this->add_activity($event_data);
 		}
 
@@ -247,17 +445,37 @@ if (!class_exists('BVWPActLog')) :
 			add_action('switch_theme', array($this, 'theme_action_handler'));
 
 			/* SENSORS FOR MULTISITE CHANGES */
-			add_action('wpmu_new_blog', array($this, 'mu_handler'));
+			add_action('wp_insert_site', array($this, 'mu_site_handler'));
 			add_action('archive_blog', array($this, 'mu_handler'));
 			add_action('unarchive_blog', array( $this, 'mu_handler'));
 			add_action('activate_blog', array($this, 'mu_handler'));
 			add_action('deactivate_blog', array($this, 'mu_handler'));
-			add_action('wp_delete_site', array($this, 'mu_delete_handler'));
+			add_action('wp_delete_site', array($this, 'mu_site_handler'));
 
 			/* SENSORS USER ACTIONS AT FRONTEND */
 			add_action('wp_login', array($this, 'user_login_handler'), 10, 2);
 			add_action('wp_logout', array( $this, 'user_logout_handler'), 5, 1);
 			add_action('password_reset', array( $this, 'password_reset_handler'), 10, 2);
+
+			/* SENSOR FOR PLUGIN, THEME, WPCORE UPGRADES */
+			add_action('upgrader_process_complete', array($this, 'upgrade_handler'), 10, 2);
+
+			/* SENSORS FOR WOOCOMMERCE EVENTS */
+			add_action('woocommerce_attribute_added', array($this, 'woocommerce_attribute_created_handler'), 10, 2);
+			add_action('woocommerce_attribute_updated', array($this, 'woocommerce_attribute_handler'), 10, 1);
+			add_action('woocommerce_before_attribute_delete', array($this, 'woocommerce_attribute_handler'), 10, 1);
+			add_action('woocommerce_attribute_deleted', array($this, 'woocommerce_attribute_handler'), 10, 1);
+
+			add_action('woocommerce_tax_rate_added', array($this, 'woocommerce_tax_rate_handler'), 10, 2);
+			add_action('woocommerce_tax_rate_deleted', array($this, 'woocommerce_tax_rate_deleted_handler'), 10, 1);
+			add_action('woocommerce_tax_rate_updated', array($this, 'woocommerce_tax_rate_handler'), 10, 2);
+
+			add_action('woocommerce_grant_product_download_access', array($this, 'woocommerce_grant_product_download_access_handler'), 10, 1);
+			add_action('woocommerce_ajax_revoke_access_to_product_download', array($this, 'woocommerce_revoke_access_to_product_download_handler'), 10, 3);
+
+			add_action('woocommerce_shipping_zone_method_added', array($this, 'woocommerce_shipping_zone_method_handler'), 10, 3);
+			add_action('woocommerce_shipping_zone_method_status_toggled', array($this, 'woocommerce_shipping_zone_method_handler'), 10, 3);
+			add_action('woocommerce_shipping_zone_method_deleted', array($this, 'woocommerce_shipping_zone_method_handler'), 10, 3);
 		}
 	}
 endif;

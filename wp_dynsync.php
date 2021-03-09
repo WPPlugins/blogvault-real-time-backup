@@ -95,7 +95,7 @@ class BVWPDynSync {
 		} else {
 			foreach ($comment_id as $id) {
 				if (wp_get_comment_status($comment_id) != 'spam')
-					$this->add_db_event('comments', array('comment_ID' => $idi, 'msg_type' => $msg_type));
+					$this->add_db_event('comments', array('comment_ID' => $id, 'msg_type' => $msg_type));
 			}
 		}
 	}

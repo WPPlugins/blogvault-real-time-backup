@@ -39,6 +39,11 @@ if (!class_exists('BVWPAction')) :
 			do_action('clear_pt_config');
 			do_action('clear_ip_store');
 			do_action('clear_dynsync_config');
+			do_action('clear_bv_services_config');
+		}
+
+		public function clear_bv_services_config() {
+			$this->settings->deleteOption($this->bvinfo->services_option_name);
 		}
 
 		public function footerHandler() {

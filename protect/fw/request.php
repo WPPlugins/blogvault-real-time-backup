@@ -27,9 +27,14 @@ class BVWPRequest {
 	const BYPASSED = 3;
 
 	#category
-	const BLACKLISTED  = 1;
-	const WHITELISTED  = 2;
-	const NORMAL       = 3;
+	const BLACKLISTED      = 1;
+	const NORMAL           = 10;
+	const WHITELISTED      = 20;
+	const BOT_BLOCKED      = 30;
+	const COUNTRY_BLOCKED  = 40;
+	const USER_BLACKLISTED = 50;
+	const RULE_BLOCKED     = 60;
+	const RULE_ALLOWED     = 70;
 
 	public function __construct($ip) {
 		$fileNames = array();
@@ -207,7 +212,8 @@ class BVWPRequest {
 			"referer"      => $referer,
 			"status"       => $this->getStatus(),
 			"category"     => $this->getCategory(),
-			"rules_info"   => $rules_info
+			"rules_info"   => $rules_info,
+			"request_id"   => $this->getRequestID()
 		);
 		return $data;
 	}
@@ -311,6 +317,13 @@ class BVWPRequest {
 
 	public function getTimestamp() {
 		return $this->timestamp;
+	}
+
+	public function getRequestID() {
+		if (!defined("BV_REQUEST_ID")) {
+			define("BV_REQUEST_ID", uniqid(mt_rand()));
+		}
+		return BV_REQUEST_ID;
 	}
 
 	public function getServerValue($key) {

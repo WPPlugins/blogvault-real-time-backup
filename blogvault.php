@@ -5,7 +5,7 @@ Plugin URI: https://blogvault.net
 Description: Easiest way to backup & secure your WordPress site
 Author: Backup by BlogVault
 Author URI: https://blogvault.net
-Version: 4.54
+Version: 4.55
 Network: True
  */
 
@@ -52,6 +52,7 @@ register_activation_hook(__FILE__, array($wp_action, 'activate'));
 register_deactivation_hook(__FILE__, array($wp_action, 'deactivate'));
 
 add_action('wp_footer', array($wp_action, 'footerHandler'), 100);
+add_action('clear_bv_services_config', array($wp_action, 'clear_bv_services_config'));
 
 ##WPCLIMODULE##
 if (is_admin()) {
@@ -131,7 +132,8 @@ if ((array_key_exists('bvplugname', $_REQUEST)) && ($_REQUEST['bvplugname'] == "
 		$response->terminate($resp);
 	}
 } else {
-	if ($bvsettings->getOption('bvptplug') === $bvinfo->plugname) {
+	if ($bvinfo->hasValidDBVersion()) {
+		if ($bvinfo->isProtectModuleEnabled()) {
 		require_once dirname( __FILE__ ) . '/protect/wp/protect.php';
 		$bvprotect = new BVProtect($bvdb, $bvsettings);
 		$bvprotect->init();
@@ -140,19 +142,20 @@ if ((array_key_exists('bvplugname', $_REQUEST)) && ($_REQUEST['bvplugname'] == "
 		}
 	}
 
-	if ($bvinfo->isDynSyncModuleEnabled()) {
+		if ($bvinfo->isDynSyncModuleEnabled()) {
 		require_once dirname( __FILE__ ) . '/wp_dynsync.php';
 		$dynsync = new BVWPDynSync($bvdb, $bvsettings);
 		$dynsync->init();
 	}
 
-	if ($bvinfo->isServiceActive('activity_log')) {
+		if ($bvinfo->isServiceActive('activity_log')) {
 		require_once dirname( __FILE__ ) . '/wp_actlog.php';
 		$bvconfig = $bvinfo->config;
 		$actlog = new BVWPActLog($bvdb, $bvsettings, $bvinfo, $bvconfig['activity_log']);
 		$actlog->init();
 	}
 
+	}
 	$bv_site_settings = $bvsettings->getOption('bv_site_settings');
 	if (isset($bv_site_settings)) {
 		if (isset($bv_site_settings['wp_auto_updates'])) {

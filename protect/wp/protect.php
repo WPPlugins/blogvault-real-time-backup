@@ -29,8 +29,10 @@ class BVProtect {
 		$bvipstore->init();
 		$bvinfo = new BVInfo($this->settings);
 		
-		$config = $this->settings->getOption('bvptconf');
-		if (!$config) {
+		$config = $this->settings->getOption($bvinfo->services_option_name);
+		if (array_key_exists('protect', $config)) {
+			$config = $config['protect'];
+		} else {
 			$config = array();
 		}
 
