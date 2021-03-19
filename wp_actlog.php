@@ -125,6 +125,10 @@ if (!class_exists('BVWPActLog')) :
 		}
 
 		function add_activity($event_data) {
+			if (!function_exists('wp_get_current_user')) {
+				@include_once(ABSPATH . "wp-includes/pluggable.php");
+			}
+
 			$user = wp_get_current_user();
 			$values = array();
 			if (!empty($user)) {

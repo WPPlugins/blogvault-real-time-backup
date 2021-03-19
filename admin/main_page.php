@@ -3,7 +3,7 @@
 	<?php require_once dirname( __FILE__ ) . "/top_box.php";?>
 </div>
 <div class="mui-container-fluid">
-		<?php $accounts = BVAccount::allAccounts($this->settings);?>
+		<?php $accounts = BVAccount::accountsByPlugname($this->settings);?>
 			<div class="mui-panel" style="width:800px; margin:0 auto;border:1px solid #CCC;">
 				<div class="mui--text-body1" style="text-align:center;font-size:18px;">Accounts associated with this website.</div><br/>
 				<table cellpadding="10" style="width:700px; margin:0 auto;border:1px solid black;">

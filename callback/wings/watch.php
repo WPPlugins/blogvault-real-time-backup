@@ -91,11 +91,15 @@ class BVWatchCallback extends BVCallbackBase {
 			if (array_key_exists('lp', $params)) {
 				require_once dirname( __FILE__ ) . '/../../protect/wp/lp/config.php';
 				$lp_params = $params['lp'];
-				$limit = intval(urldecode($lp_params['limit']));
-				$filter = urldecode($lp_params['filter']);
-				$db->deleteBVTableContent(BVWPLPConfig::$requests_table, $lp_params['rmfilter']);
-				$table = $db->getBVTable(BVWPLPConfig::$requests_table);
-				$resp["lplogs"] = $this->getData($table, $limit, $filter);
+				if (!$lp_params['check_table'] || $db->isTablePresent(BVWPLPConfig::$requests_table)) {
+					$limit = intval(urldecode($lp_params['limit']));
+					$filter = urldecode($lp_params['filter']);
+					$db->deleteBVTableContent(BVWPLPConfig::$requests_table, $lp_params['rmfilter']);
+					$table = $db->getBVTable(BVWPLPConfig::$requests_table);
+					$resp["lplogs"] = $this->getData($table, $limit, $filter);
+				} else {
+					$resp["lplogs"] = array("status" => "TABLE_NOT_PRESENT");
+				}
 			}
 
 			if (array_key_exists('prelog', $params)) {
@@ -106,37 +110,47 @@ class BVWatchCallback extends BVCallbackBase {
 			if (array_key_exists('fw', $params)) {
 				require_once dirname( __FILE__ ) . '/../../protect/fw/config.php';
 				$fw_params = $params['fw'];
-				$limit = intval(urldecode($fw_params['limit']));
-				$filter = urldecode($fw_params['filter']);
-				$db->deleteBVTableContent(BVFWConfig::$requests_table, $fw_params['rmfilter']);
-				$table = $db->getBVTable(BVFWConfig::$requests_table);
-				$resp["fwlogs"] = $this->getData($table, $limit, $filter);
+				if (!$fw_params['check_table'] || $db->isTablePresent(BVFWConfig::$requests_table)) {
+					$limit = intval(urldecode($fw_params['limit']));
+					$filter = urldecode($fw_params['filter']);
+					$db->deleteBVTableContent(BVFWConfig::$requests_table, $fw_params['rmfilter']);
+					$table = $db->getBVTable(BVFWConfig::$requests_table);
+					$resp["fwlogs"] = $this->getData($table, $limit, $filter);
+				} else {
+					$resp["fwlogs"] = array("status" => "TABLE_NOT_PRESENT");
+				}
 			}
 
 			if (array_key_exists('dynevent', $params)) {
 				require_once dirname( __FILE__ ) . '/../../wp_dynsync.php';
 				$isdynsyncactive = $settings->getOption('bvDynSyncActive');
 				if ($isdynsyncactive == 'yes') {
-					$limit = intval(urldecode($params['limit']));
-					$filter = urldecode($params['filter']);
-					$this->deleteBvDynamicEvents($params['rmfilter']);
-					$table = $db->getBVTable(BVWPDynSync::$dynsync_table);
-					$data = $this->getData($table, $limit, $filter);
-					$resp['last_id'] = $data['last_id'];
-					$resp['events'] = $data['rows'];
-					$resp['timestamp'] = time();
-					$resp["status"] = true;
+					if (!$params['check_table'] || $db->isTablePresent(BVWPDynSync::$dynsync_table)) {
+						$limit = intval(urldecode($params['limit']));
+						$filter = urldecode($params['filter']);
+						$this->deleteBvDynamicEvents($params['rmfilter']);
+						$table = $db->getBVTable(BVWPDynSync::$dynsync_table);
+						$data = $this->getData($table, $limit, $filter);
+						$resp['last_id'] = $data['last_id'];
+						$resp['events'] = $data['rows'];
+						$resp['timestamp'] = time();
+						$resp["status"] = true;
+					}
 				}
 			}
 
 			if (array_key_exists('actlog', $params)) {
 				require_once dirname( __FILE__ ) . '/../../wp_actlog.php';
 				$actlog_params = $params['actlog'];
-				$limit = intval(urldecode($actlog_params['limit']));
-				$filter = urldecode($actlog_params['filter']);
-				$db->deleteBVTableContent(BVWPActLog::$actlog_table, $actlog_params['rmfilter']);
-				$table = $db->getBVTable(BVWPActLog::$actlog_table);
-				$resp["actlogs"] = $this->getData($table, $limit, $filter);
+				if (!$actlog_params['check_table'] || $db->isTablePresent(BVWPActLog::$actlog_table)) {
+					$limit = intval(urldecode($actlog_params['limit']));
+					$filter = urldecode($actlog_params['filter']);
+					$db->deleteBVTableContent(BVWPActLog::$actlog_table, $actlog_params['rmfilter']);
+					$table = $db->getBVTable(BVWPActLog::$actlog_table);
+					$resp["actlogs"] = $this->getData($table, $limit, $filter);
+				} else {
+					$resp["actlogs"] = array("status" => "TABLE_NOT_PRESENT");
+				}
 			}
 
 			$resp["status"] = "done";
