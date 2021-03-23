@@ -91,7 +91,7 @@ class BVWatchCallback extends BVCallbackBase {
 			if (array_key_exists('lp', $params)) {
 				require_once dirname( __FILE__ ) . '/../../protect/wp/lp/config.php';
 				$lp_params = $params['lp'];
-				if (!$lp_params['check_table'] || $db->isTablePresent(BVWPLPConfig::$requests_table)) {
+				if (!isset($lp_params['bv_check_table']) || $db->isTablePresent($db->getBVTable(BVWPLPConfig::$requests_table))) {
 					$limit = intval(urldecode($lp_params['limit']));
 					$filter = urldecode($lp_params['filter']);
 					$db->deleteBVTableContent(BVWPLPConfig::$requests_table, $lp_params['rmfilter']);
@@ -110,7 +110,7 @@ class BVWatchCallback extends BVCallbackBase {
 			if (array_key_exists('fw', $params)) {
 				require_once dirname( __FILE__ ) . '/../../protect/fw/config.php';
 				$fw_params = $params['fw'];
-				if (!$fw_params['check_table'] || $db->isTablePresent(BVFWConfig::$requests_table)) {
+				if (!isset($fw_params['bv_check_table']) || $db->isTablePresent($db->getBVTable(BVFWConfig::$requests_table))) {
 					$limit = intval(urldecode($fw_params['limit']));
 					$filter = urldecode($fw_params['filter']);
 					$db->deleteBVTableContent(BVFWConfig::$requests_table, $fw_params['rmfilter']);
@@ -125,7 +125,7 @@ class BVWatchCallback extends BVCallbackBase {
 				require_once dirname( __FILE__ ) . '/../../wp_dynsync.php';
 				$isdynsyncactive = $settings->getOption('bvDynSyncActive');
 				if ($isdynsyncactive == 'yes') {
-					if (!$params['check_table'] || $db->isTablePresent(BVWPDynSync::$dynsync_table)) {
+					if (!isset($params['bv_check_table']) || $db->isTablePresent($db->getBVTable(BVWPDynSync::$dynsync_table))) {
 						$limit = intval(urldecode($params['limit']));
 						$filter = urldecode($params['filter']);
 						$this->deleteBvDynamicEvents($params['rmfilter']);
@@ -142,7 +142,7 @@ class BVWatchCallback extends BVCallbackBase {
 			if (array_key_exists('actlog', $params)) {
 				require_once dirname( __FILE__ ) . '/../../wp_actlog.php';
 				$actlog_params = $params['actlog'];
-				if (!$actlog_params['check_table'] || $db->isTablePresent(BVWPActLog::$actlog_table)) {
+				if (!isset($actlog_params['bv_check_table']) || $db->isTablePresent($db->getBVTable(BVWPActLog::$actlog_table))) {
 					$limit = intval(urldecode($actlog_params['limit']));
 					$filter = urldecode($actlog_params['filter']);
 					$db->deleteBVTableContent(BVWPActLog::$actlog_table, $actlog_params['rmfilter']);
