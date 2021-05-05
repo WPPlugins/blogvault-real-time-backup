@@ -168,7 +168,7 @@ class BVFSCallback extends BVCallbackBase {
 			if (is_dir($absfile) && !is_link($absfile)) {
 				$fdata['is_dir'] = true;
 			} else {
-				if (!is_readable($file)) {
+				if (!is_readable($absfile)) {
 					$fdata['error'] = 'file not readable';
 				} else {
 					if ($withContent === true) {

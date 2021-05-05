@@ -51,6 +51,7 @@ class BVFW {
 
 	const BYPASS_COOKIE = "bvfw-bypass-cookie";
 	const IP_COOKIE = "bvfw-ip-cookie";
+	const PREVENT_CACHE_COOKIE = "wp-bvfw-prevent-cache-cookie";
 
 	public function __construct($logger, $confHash, $ip, $bvinfo, $ipstore, $ruleSet) {
 		$this->config = new BVFWConfig($confHash);
@@ -178,6 +179,13 @@ class BVFW {
 		$this->request->setCategory($category);
 		$this->request->setStatus(BVWPRequest::BLOCKED);
 		$this->request->setRespCode(403);
+
+		if ($this->config->canSetCachePreventionCookie &&
+				!$this->request->getCookies(BVFW::PREVENT_CACHE_COOKIE)) {
+			$value = "Prevent Caching Response.";
+			$this->setcookie(BVFW::PREVENT_CACHE_COOKIE, $value, time() + 43200);
+		}
+
 		header("Cache-Control: no-cache, no-store, must-revalidate");
 		header("Pragma: no-cache");
 		header("Expires: 0");

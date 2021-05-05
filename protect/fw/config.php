@@ -37,6 +37,8 @@ class BVFWConfig {
 		$this->cookieKey = array_key_exists('cookiekey', $confHash) ? $confHash['cookiekey'] : "";
 		$this->cookiePath = array_key_exists('cookiepath', $confHash) ? $confHash['cookiepath'] : "";
 		$this->cookieDomain = array_key_exists('cookiedomain', $confHash) ? $confHash['cookiedomain'] : "";
+		$this->canSetCachePreventionCookie = array_key_exists('cansetcachepreventioncookie', $confHash) ?
+				$confHash['cansetcachepreventioncookie'] : false;
 		$this->rulesMode = array_key_exists('rulesmode', $confHash) ? intval($confHash['rulesmode']) : BVFWConfig::DISABLED;
 	}
 	

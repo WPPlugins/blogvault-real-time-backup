@@ -247,6 +247,11 @@ class BVInfoCallback extends BVCallbackBase {
 		if (array_key_exists('IS_PRESSABLE', get_defined_constants())) {
 			$host_info['IS_PRESSABLE'] = true;
 		}
+
+		if (array_key_exists('GRIDPANE', get_defined_constants())) {
+			$host_info['IS_GRIDPANE'] = true;
+		}
+
 		return array('host_info' => $host_info);
 	}
 
