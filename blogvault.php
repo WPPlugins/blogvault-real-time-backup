@@ -5,7 +5,7 @@ Plugin URI: https://blogvault.net
 Description: Easiest way to backup & secure your WordPress site
 Author: Backup by BlogVault
 Author URI: https://blogvault.net
-Version: 4.58
+Version: 4.61
 Network: True
  */
 
@@ -69,8 +69,7 @@ if (is_admin()) {
 	add_filter('plugin_action_links', array($wpadmin, 'settingsLink'), 10, 2);
 	add_action('admin_head', array($wpadmin, 'removeAdminNotices'), 3);
 	add_action('admin_notices', array($wpadmin, 'activateWarning'));
-	##ADMINENQUEUESCRIPTS##
-	##REMOVEDEACTIVATIONLINK##
+	add_action('admin_enqueue_scripts', array($wpadmin, 'bvsecAdminMenu'));
 }
 
 

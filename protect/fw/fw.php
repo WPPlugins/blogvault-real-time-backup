@@ -252,7 +252,7 @@ class BVFW {
 				$this->terminateRequest(BVWPRequest::BLACKLISTED);
 			}
 			if ($this->config->isRulesModeEnabled()) {
-				if ($this->ruleSet) {
+				if (is_array($this->ruleSet)) {
 					$this->evaluateRules($this->ruleSet);
 				} else {
 					$this->request->updateRulesInfo('errors', 'ruleset', 'Invalid RuleSet');
@@ -395,7 +395,7 @@ class BVFW {
 
 			if (BVFWRuleEvaluator::VERSION >= $min_rule_engine_ver) {
 				if ($this->ruleEvaluator->evaluateRule($ruleLogic) && empty($this->ruleEvaluator->getErrors())) {
-					$this->request->updateRulesInfo('matched_rules', $id, null);
+					$this->request->updateMatchedRules($id);
 					$this->executeActions($actions);
 				} elseif (!empty($this->ruleEvaluator->getErrors())) {
 					$this->request->updateRulesInfo("errors", (string) $id, $this->ruleEvaluator->getErrors());

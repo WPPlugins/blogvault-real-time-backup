@@ -20,6 +20,7 @@ class BVWPRequest {
 	private $status;
 	private $rulesInfo;
 	private $reqInfo;
+	private $matchedRules;
 
 	#status
  	const ALLOWED  = 1;
@@ -44,6 +45,7 @@ class BVWPRequest {
 		$path = '';
 		$this->ip = $ip;
 		$this->rulesInfo = array();
+		$this->matchedRules = array();
 		$this->reqInfo = array();
 		$this->setRespCode(0);
 		$this->setCategory(BVWPRequest::NORMAL);
@@ -160,6 +162,10 @@ class BVWPRequest {
 		$this->uri = $uri;
 	}
 
+	public function updateMatchedRules($matched_rule_id) {
+		$this->matchedRules[] = $matched_rule_id;
+	}
+
 	public function updateRulesInfo($category, $sub_category, $value) {
 		$rule_info = (array_key_exists($category, $this->rulesInfo)) ? $this->rulesInfo[$category] : array();
 		$rule_info[$sub_category] = $value;
@@ -168,6 +174,10 @@ class BVWPRequest {
 	
 	public function getRulesInfo() {
 		return $this->rulesInfo;
+	}
+
+	public function getMatchedRules() {
+		return $this->matchedRules;
 	}
 
 	public function updateReqInfo($info) {
@@ -213,7 +223,8 @@ class BVWPRequest {
 			"status"       => $this->getStatus(),
 			"category"     => $this->getCategory(),
 			"rules_info"   => $rules_info,
-			"request_id"   => $this->getRequestID()
+			"request_id"   => $this->getRequestID(),
+			"matched_rules"=> serialize($this->getMatchedRules())
 		);
 		return $data;
 	}

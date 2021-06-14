@@ -10,7 +10,7 @@ if (!class_exists('BVInfo')) :
 		public $badgeinfo = 'bvbadge';
 		public $ip_header_option = 'bvipheader';
 		public $brand_option = 'bvbrand';
-		public $version = '4.58';
+		public $version = '4.61';
 		public $webpage = 'https://blogvault.net';
 		public $appurl = 'https://app.blogvault.net';
 		public $slug = 'blogvault-real-time-backup/blogvault.php';
@@ -19,7 +19,7 @@ if (!class_exists('BVInfo')) :
 		public $brand_icon = '/img/icon.png';
 		public $services_option_name = 'bvconfig';
 
-		const DB_VERSION = '2';
+		const DB_VERSION = '3';
 
 		public function __construct($settings) {
 			$this->settings = $settings;

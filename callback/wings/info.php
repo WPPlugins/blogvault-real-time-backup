@@ -252,6 +252,10 @@ class BVInfoCallback extends BVCallbackBase {
 			$host_info['IS_GRIDPANE'] = true;
 		}
 
+		if (defined('WPE_APIKEY')) {
+			$host_info['WPE_APIKEY'] = WPE_APIKEY;
+		}
+
 		return array('host_info' => $host_info);
 	}
 

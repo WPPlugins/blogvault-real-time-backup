@@ -55,6 +55,14 @@ class BVWPAdmin {
 		}
 	}
 
+	public function bvsecAdminMenu($hook) {
+		if ($hook === 'toplevel_page_bvbackup' || preg_match("/bv_add_account$/", $hook) || preg_match("/bv_account_details$/", $hook)) {
+			wp_enqueue_style( 'bvsurface', plugins_url('css/bvmui.min.css', __FILE__));
+			wp_enqueue_style( 'bootstrap', plugins_url('css/bootstrap.min.css', __FILE__));
+			wp_enqueue_style( 'bvplugin', plugins_url('css/bvplugin.min.css', __FILE__));
+		}
+	}
+
 	public function menu() {
 		$brand = $this->bvinfo->getBrandInfo();
 		if (!$brand || (!array_key_exists('hide', $brand) && !array_key_exists('hide_from_menu', $brand))) {
@@ -139,26 +147,30 @@ class BVWPAdmin {
 		}
 	}
 
+	public function showAddAccountPage() {
+		require_once dirname( __FILE__ ) . "/admin/add_new_account.php";
+	}
+
+	public function showAccountDetailsPage() {
+		require_once dirname( __FILE__ ) . "/admin/account_details.php";
+	}
+
 	public function adminPage() {
-		wp_enqueue_style( 'bvsurface', plugins_url('css/bvmui.min.css', __FILE__));
-		wp_enqueue_style( 'bvplugin', plugins_url('css/bvplugin.min.css', __FILE__));
 		if (isset($_REQUEST['bvnonce']) && wp_verify_nonce( $_REQUEST['bvnonce'], 'bvnonce' )) {
 			$info = array();
 			$this->siteinfo->basic($info);
 			$this->bvapi->pingbv('/bvapi/disconnect', $info, $_REQUEST['pubkey']);
 			BVAccount::remove($this->settings, $_REQUEST['pubkey']);
 		}
-		require_once dirname( __FILE__ ) . '/admin/header.php';
 		if (BVAccount::isConfigured($this->settings)) {
 			if (!isset($_REQUEST['add_account'])) {
-				require_once dirname( __FILE__ ) . '/admin/main_page.php';
+				$this->showAccountDetailsPage();
 			} else {
-				require_once dirname( __FILE__ ) . '/admin/add_new_acc.php';
+				$this->showAddAccountPage();
 			}
 		} else {
-			require_once dirname( __FILE__ ) . '/admin/add_new_acc.php';
+			$this->showAddAccountPage();
 		}
-		require_once dirname( __FILE__ ) . '/admin/footer.php';
 	}
 
 	public function initBranding($plugins) {
