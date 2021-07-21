@@ -40,6 +40,7 @@ class BVDBCallback extends BVCallbackBase {
 			$rows = $this->db->getTableContent($table, '*', $filter, $bsize, $offset);
 			$srows = sizeof($rows);
 			$data = array();
+			$data["table_name"] = $tname;
 			$data["offset"] = $offset;
 			$data["size"] = $srows;
 			$serialized_rows = serialize($rows);
@@ -212,6 +213,22 @@ class BVDBCallback extends BVCallbackBase {
 				$tname = urldecode($params['tname']);
 				$pkeys = (array_key_exists('pkeys', $params)) ? $params['pkeys'] : array();
 				$resp = $this->getTableData($table, $tname, $rcount, $offset, $limit, $bsize, $filter, $pkeys, false);
+				break;
+			case "getmulttables":
+				$result = array();
+				$tableParams = $params['table_params'];
+				$resp = array();
+				foreach($tableParams as $tableParam) {
+					$table = urldecode($tableParam['table']);
+					$tname = urldecode($tableParam['tname']);
+					$rcount = intval(urldecode($tableParam['rcount']));
+					$filter = (array_key_exists('filter', $tableParam)) ? urldecode($tableParam['filter']) : "";
+					$limit = intval(urldecode($tableParam['limit']));
+					$offset = intval(urldecode($tableParam['offset']));
+					$bsize = intval(urldecode($tableParam['bsize']));
+					$pkeys = (array_key_exists('pkeys', $tableParam)) ? $tableParam['pkeys'] : array();
+					$resp[$tname] = $this->getTableData($table, $tname, $rcount, $offset, $limit, $bsize, $filter, $pkeys, true);
+				}
 				break;
 			case "uploadrows":
 				$table = urldecode($params['table']);
