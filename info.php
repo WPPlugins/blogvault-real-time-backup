@@ -10,7 +10,7 @@ if (!class_exists('BVInfo')) :
 		public $badgeinfo = 'bvbadge';
 		public $ip_header_option = 'bvipheader';
 		public $brand_option = 'bvbrand';
-		public $version = '4.63';
+		public $version = '4.64';
 		public $webpage = 'https://blogvault.net';
 		public $appurl = 'https://app.blogvault.net';
 		public $slug = 'blogvault-real-time-backup/blogvault.php';
@@ -108,8 +108,13 @@ if (!class_exists('BVInfo')) :
 		}
 
 		public function isDynSyncModuleEnabled() {
-			return ($this->settings->getOption('bvdynplug') === $this->plugname) &&
-				$this->isActivePlugin();
+			if ($this->isServiceActive("dynsync")) {
+				$dynconfig = $this->config['dynsync'];
+				if (array_key_exists('dynplug', $dynconfig) && ($dynconfig['dynplug'] === $this->plugname)) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		public function isServiceActive($service) {

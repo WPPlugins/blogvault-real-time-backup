@@ -203,6 +203,32 @@ class BVDBCallback extends BVCallbackBase {
 				$result["rows"] = $rows;
 				$resp = $result;
 				break;
+			case "multitablecontent":
+				$tableParams = $params['table_params'];
+				$resp = array();
+				foreach($tableParams as $tableParam) {
+					$result = array();
+					$identifier = $tableParam['identifier'];
+					$table = $tableParam['table'];
+					$tname = $tableParam['tname'];
+					$fields = $tableParam['fields'];
+					$filter = (array_key_exists('filter', $tableParam)) ? $tableParam['filter'] : "";
+					$limit = $tableParam['limit'];
+					$offset = $tableParam['offset'];
+					$pkeys = (array_key_exists('pkeys', $tableParam)) ? $tableParam['pkeys'] : array();
+					$result['timestamp'] = time();
+					$result['table_name'] = $tname;
+					$rows = $db->getTableContent($table, $fields, $filter, $limit, $offset);
+					$srows = sizeof($rows);
+					if (!empty($pkeys) && $srows > 0) {
+						$end_row = end($rows);
+						$result['last_ids'] = $this->getLastID($pkeys, $end_row);
+					}
+					$result["rows"] = $rows;
+					$result["size"] = $srows;
+					$resp[$identifier] = $result;
+				}
+				break;
 			case "tableinfo":
 				$table = urldecode($params['table']);
 				$offset = intval(urldecode($params['offset']));

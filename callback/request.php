@@ -70,11 +70,6 @@ if (!class_exists('BVCallbackRequest')) :
 			if (array_key_exists('op_reset', $in_params) && function_exists('output_reset_rewrite_vars'))
 				@output_reset_rewrite_vars();
 
-			if (array_key_exists('binhead', $in_params)) {
-				header("Content-type: application/binary");
-				header('Content-Transfer-Encoding: binary');
-			}
-
 			if (array_key_exists('concat', $in_params)) {
 				foreach ($in_params['concat'] as $key) {
 					$concated = '';

@@ -205,9 +205,6 @@ class BVInfoCallback extends BVCallbackBase {
 	
 	public function servicesInfo(&$data) {
 		$settings = $this->settings;
-		$data['dynsync'] = $settings->getOption('bvDynSyncActive');
-		$data['woodyn'] = $settings->getOption('bvWooDynSync');
-		$data['dynplug'] = $settings->getOption('bvdynplug');
 		$data['protect'] = $settings->getOption('bvptconf');
 		$data['brand'] = $settings->getOption($this->bvinfo->brand_option);
 		$data['badgeinfo'] = $settings->getOption($this->bvinfo->badgeinfo);
