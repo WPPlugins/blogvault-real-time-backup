@@ -163,10 +163,10 @@ class BVWPAdmin {
 			BVAccount::remove($this->settings, $_REQUEST['pubkey']);
 		}
 		if (BVAccount::isConfigured($this->settings)) {
-			if (!isset($_REQUEST['add_account'])) {
-				$this->showAccountDetailsPage();
-			} else {
+			if (isset($_REQUEST['add_account'])) {
 				$this->showAddAccountPage();
+			} else {
+				$this->showAccountDetailsPage();
 			}
 		} else {
 			$this->showAddAccountPage();

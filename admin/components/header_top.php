@@ -31,7 +31,7 @@
 	</div>
 	<div class="logo-img">
 		<a href="<?php echo $header_logo_link; ?>" target="_blank" rel="noopener noreferrer">
-			<img height="70" src="<?php echo $plugin_logo; ?>" alt="Logo">
+			<img height="65" src="<?php echo $plugin_logo; ?>" alt="Logo">
 		</a>
 	</div>
 	<h2 class="text-center heading"><?php echo $title; ?></h2>
