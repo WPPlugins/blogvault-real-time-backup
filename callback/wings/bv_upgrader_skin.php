@@ -9,6 +9,8 @@ class BVUpgraderSkin extends WP_Upgrader_Skin {
 	public $theme_info = array();
 	public $language_update = null;
 
+	const UPGRADER_WING_VERSION = 1.0;
+
 	function __construct($type, $package = '') {
 		$this->action = $type;
 		$this->package = $package;

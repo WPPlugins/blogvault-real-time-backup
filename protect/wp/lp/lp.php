@@ -83,6 +83,18 @@ class BVWPLP {
 		return $this->config->captchaLimit;
 	}
 
+	public function getFailedLoginGap() {
+		return $this->config->failedLoginGap;
+	}
+
+	public function getSuccessLoginGap() {
+		return $this->config->successLoginGap;
+	}
+
+	public function getAllBlockedGap() {
+		return $this->config->allBlockedGap;
+	}
+
 	public function getTempBlockLimit() {
 		return $this->config->tempBlockLimit;
 	}
@@ -149,7 +161,7 @@ class BVWPLP {
 
 	public function isLoginBlocked() {
 		if ($this->getAllowLoginsTransient() ||
-				($this->getLoginCount(BVWPLP::LOGINFAILURE) < $this->getBlockAllLimit())) {
+				($this->getLoginCount(BVWPLP::LOGINFAILURE, null, $this->getAllBlockedGap()) < $this->getBlockAllLimit())) {
 			return false;
 		}
 		return true;
@@ -184,7 +196,7 @@ class BVWPLP {
 		if ($this->isUnBlockedIP()) {
 			$this->setCategory(BVWPLP::UNBLOCKED);
 		} else {
-			$failed_attempts = $this->getLoginCount(BVWPLP::LOGINFAILURE, $this->ip);
+			$failed_attempts = $this->getLoginCount(BVWPLP::LOGINFAILURE, $this->ip, $this->getFailedLoginGap());
 			if ($this->isWhitelistedIP()) {
 				$this->setCategory(BVWPLP::BYPASSED);
 			} else if ($this->isBlacklistedIP()) {
@@ -221,7 +233,7 @@ class BVWPLP {
 	}
 
 	public function isKnownLogin() {
-		return $this->getLoginCount(BVWPLP::LOGINSUCCESS, $this->ip, 3600) > 0;
+		return $this->getLoginCount(BVWPLP::LOGINSUCCESS, $this->ip, $this->getSuccessLoginGap()) > 0;
 	}
 
 	public function getLoginCount($status, $ip = null, $gap = 1800) {

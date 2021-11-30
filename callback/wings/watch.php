@@ -7,6 +7,8 @@ class BVWatchCallback extends BVCallbackBase {
 	public $db;
 	public $settings;
 
+	const WATCH_WING_VERSION = 1.0;
+
 	public function __construct($callback_handler) {
 		$this->db = $callback_handler->db;
 		$this->settings = $callback_handler->settings;

@@ -8,6 +8,8 @@ require_once dirname( __FILE__ ) . '/../../protect/wp/ipstore.php';
 class BVIPStoreCallback extends BVCallbackBase {
 	public $db;
 
+	const IPSTORE_WING_VERSION = 1.0;
+
 	public function __construct($callback_handler) {
 		$this->db = $callback_handler->db;
 	}

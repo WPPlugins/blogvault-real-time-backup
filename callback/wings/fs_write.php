@@ -6,6 +6,7 @@ if (!class_exists('BVFSWriteCallback')) :
 class BVFSWriteCallback extends BVCallbackBase {
 
 	const MEGABYTE = 1048576;
+	const FS_WRITE_WING_VERSION = 1.0;
 	
 	public function __construct() {
 	}

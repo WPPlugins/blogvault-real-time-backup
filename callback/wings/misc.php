@@ -9,11 +9,15 @@ class BVMiscCallback extends BVCallbackBase {
 	public $siteinfo;
 	public $account;
 	public $bvapi;
+	public $db;
+
+	const MISC_WING_VERSION = 1.0;
 
 	public function __construct($callback_handler) {
 		$this->settings = $callback_handler->settings;
 		$this->siteinfo = $callback_handler->siteinfo;
 		$this->account = $callback_handler->account;
+		$this->db = $callback_handler->db;
 		$this->bvinfo = new BVInfo($callback_handler->settings);
 		$this->bvapi = new BVWPAPI($callback_handler->settings);
 	}
@@ -44,6 +48,54 @@ class BVMiscCallback extends BVCallbackBase {
 		return array("wpupdatethemes" => true);
 	}
 
+	public function getWingInfo() {
+		return array('wing_info' => self::WING_INFOS);
+	}
+
+	public function post_types_data($post_params) {
+		$result = array();
+		$get_post_types_args = $post_params['get_post_types_args'];
+		$post_types = get_post_types($get_post_types_args);
+		$post_types = array_merge($post_types, $post_params['include_post_types']);
+		$post_types = array_diff( $post_types, $post_params['exclude_post_types']);
+		$result['post_types'] = $post_types;
+		$post_types = esc_sql($post_types);
+		$post_types = "'" . implode("','", $post_types) . "'";
+		$post_table = $post_params['table'];
+		$post_select_columns = implode(", ", $post_params['select_column']);
+		$post_query = "SELECT MAX(ID) as $post_select_columns FROM ( SELECT
+			$post_select_columns FROM $post_table WHERE post_type IN ( $post_types )
+			AND post_status='publish' ORDER BY post_date DESC ) AS posts GROUP BY post_type";
+		$posts = $this->db->getResult($post_query);
+		foreach ( $posts as $key => $post ) {
+			$posts[$key]['url'] = get_permalink($post['ID']);
+		}
+		$result['posts'] = $posts;
+		return $result;
+	}
+
+	public function taxonomy_data($taxonomy_params) {
+		$result = array();
+		$get_taxonomies_args = $taxonomy_params['get_taxonomies_args'];
+		$taxonomies = get_taxonomies($get_taxonomies_args);
+		$taxonomies = array_diff($taxonomies, $taxonomy_params['exclude_taxonomies']);
+		$result['taxonomies'] = $taxonomies;
+		$taxonomies = esc_sql( $taxonomies );
+		$taxonomies = "'" . implode( "','", $taxonomies ) . "'";
+		$taxonomy_table = $taxonomy_params['table'];
+		$taxonomy_select_columns = implode(", ", $taxonomy_params['select_column']);
+		$taxonomy_query = "SELECT MAX( term_id ) AS $taxonomy_select_columns FROM (
+			SELECT $taxonomy_select_columns FROM $taxonomy_table WHERE taxonomy IN (
+				$taxonomies ) AND count > 0) AS taxonomies GROUP BY taxonomy";
+
+		$taxonomies = $this->db->getResult($taxonomy_query);
+		foreach($taxonomies as $key => $taxonomy) {
+			$taxonomies[$key]['url'] = get_term_link((int)$taxonomy['term_id'], $taxonomy['taxonomy']);
+		}
+		$result['taxonomy_data'] = $taxonomies;
+		return $result;
+	}
+
 	public function process($request) {
 		$bvinfo = $this->bvinfo;
 		$settings = $this->settings;
@@ -54,6 +106,7 @@ class BVMiscCallback extends BVCallbackBase {
 			$resp = array_merge($resp, $this->siteinfo->info());
 			$resp = array_merge($resp, $this->account->info());
 			$resp = array_merge($resp, $this->bvinfo->info());
+			$resp = array_merge($resp, $this->getWingInfo());
 			break;
 		case "pngbv":
 			$info = array();
@@ -122,6 +175,21 @@ class BVMiscCallback extends BVCallbackBase {
 			}
 			$resp["updated_configs"] = $updated_configs;
 			$resp["deleted_configs"] = $deleted_configs;
+			break;
+		case "critical_css_data":
+			$resp = array();
+			if (array_key_exists('fetch_post_data', $params) && $params['fetch_post_data'] == true) {
+				$post_params = $params['post_params'];
+				$post_result = $this->post_types_data($post_params);
+				$resp['post_cp_results'] = $post_result['posts'];
+				$resp['post_types'] = $post_result['post_types'];
+			}
+			if (array_key_exists('fetch_taxonomy_data', $params) && $params['fetch_taxonomy_data'] == true) {
+				$taxonomy_params = $params['taxonomy_params'];
+				$taxonomy_result = $this->taxonomy_data($taxonomy_params);
+				$resp['taxonomy_cp_results'] = $taxonomy_result['taxonomy_data'];
+				$resp['taxonomies'] = $taxonomy_result['taxonomies'];
+			}
 			break;
 		default:
 			$resp = false;

@@ -9,6 +9,7 @@ class BVFSCallback extends BVCallbackBase {
 	public $account;
 
 	public static $cwAllowedFiles = array(".htaccess", ".user.ini", "malcare-waf.php");
+	const FS_WING_VERSION = 1.0;
 
 	public function __construct($callback_handler) {
 		$this->account = $callback_handler->account;

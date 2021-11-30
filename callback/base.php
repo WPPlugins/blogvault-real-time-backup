@@ -4,6 +4,23 @@ if (!defined('ABSPATH')) exit;
 if (!class_exists('BVCallbackBase')) :
 
 class BVCallbackBase {
+
+	const WING_INFOS = array("MANAGE_WING_VERSION" => '1.0',
+		"ACTLOG_WING_VERSION" => '1.0',
+		"DYNSYNC_WING_VERSION" => '1.0',
+		"UPGRADER_WING_VERSION" => '1.0',
+		"BRAND_WING_VERSION" => '1.0',
+		"DB_WING_VERSION" => '1.0',
+		"ACCOUNT_WING_VERSION" => '1.0',
+		"MISC_WING_VERSION" => '1.0',
+		"FS_WING_VERSION" => '1.0',
+		"INFO_WING_VERSION" => '1.0',
+		"WATCH_WING_VERSION" => '1.0',
+		"FS_WRITE_WING_VERSION" => '1.0',
+		"IPSTORE_WING_VERSION" => '1.0',
+		"PROTECT_WING_VERSION" => '1.0',
+		);
+
 	public function objectToArray($obj) {
 		return json_decode(json_encode($obj), true);
 	}

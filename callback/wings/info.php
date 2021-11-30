@@ -8,6 +8,8 @@ class BVInfoCallback extends BVCallbackBase {
 	public $settings;
 	public $siteinfo;
 	public $bvinfo;
+	
+	const INFO_WING_VERSION = 1.0;
 
 	public function __construct($callback_handler) {
 		$this->db = $callback_handler->db;
@@ -156,7 +158,7 @@ class BVInfoCallback extends BVCallbackBase {
 		return array("wp" => $wp_info);
 	}
 
-	public function getUsers($args = array(), $full) {
+	public function getUsers($full, $args = array()) {
 		$results = array();
 		$users = get_users($args);
 		if ('true' == $full) {
@@ -301,7 +303,7 @@ class BVInfoCallback extends BVCallbackBase {
 			$full = false;
 			if (array_key_exists('full', $params))
 				$full = true;
-			$resp = $this->getUsers($params['args'], $full);
+			$resp = $this->getUsers($full, $params['args']);
 			break;
 		case "gttrnsnt":
 			$transient = $this->settings->getTransient($params['name']);

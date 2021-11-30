@@ -11,6 +11,8 @@ class BVDBCallback extends BVCallbackBase {
 
 	public static $bvTables = array("fw_requests", "lp_requests", "ip_store");
 
+	const DB_WING_VERSION = 1.0;
+
 	public function __construct($callback_handler) {
 		$this->db = $callback_handler->db;
 		$this->account = $callback_handler->account;
