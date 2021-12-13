@@ -11,7 +11,7 @@ class BVMiscCallback extends BVCallbackBase {
 	public $bvapi;
 	public $db;
 
-	const MISC_WING_VERSION = 1.0;
+	const MISC_WING_VERSION = 1.1;
 
 	public function __construct($callback_handler) {
 		$this->settings = $callback_handler->settings;
@@ -49,7 +49,7 @@ class BVMiscCallback extends BVCallbackBase {
 	}
 
 	public function getWingInfo() {
-		return array('wing_info' => self::WING_INFOS);
+		return array('wing_info' => self::$wing_infos);
 	}
 
 	public function post_types_data($post_params) {

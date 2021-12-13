@@ -29,6 +29,10 @@ require_once dirname( __FILE__ ) . '/logger.php';
 				$content = file_get_contents($fname);
 				if (($content !== false) && is_string($content)) {
 					$result = json_decode($content, true);
+
+					if (!is_array($result)) {
+						$result = array();
+					}
 				}
 			}
 
@@ -41,10 +45,6 @@ require_once dirname( __FILE__ ) . '/logger.php';
 			$mcRuleSet = $this->parseFile($this->mcRulesFile);
 
 			if (!array_key_exists('time', $mcConf) || !isset($mcConf['time']) || !($mcConf['time'] > time() - (48*3600))) {
-				return false;
-			}
-
-			if (empty($mcConf) || empty($mcIPsConf)) {
 				return false;
 			}
 
