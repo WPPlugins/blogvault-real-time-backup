@@ -9,7 +9,7 @@ class BVInfoCallback extends BVCallbackBase {
 	public $siteinfo;
 	public $bvinfo;
 	
-	const INFO_WING_VERSION = 1.0;
+	const INFO_WING_VERSION = 1.1;
 
 	public function __construct($callback_handler) {
 		$this->db = $callback_handler->db;
@@ -118,7 +118,7 @@ class BVInfoCallback extends BVCallbackBase {
 			$sys_info['webuid'] = posix_getuid();
 			$sys_info['webgid'] = posix_getgid();
 		}
-		return array("sys" => $sys_info);
+		return $sys_info;
 	}
 
 	public function getWpInfo() {
@@ -178,7 +178,7 @@ class BVInfoCallback extends BVCallbackBase {
 				$results[] = $result;
 			}
 		}
-		return array("users" => $results);
+		return $results;
 	}
 	
 	public function availableFunctions(&$info) {
@@ -258,6 +258,100 @@ class BVInfoCallback extends BVCallbackBase {
 		return array('host_info' => $host_info);
 	}
 
+	function refreshUpdatesInfo() {
+		global $wp_current_filter;
+		$wp_current_filter[] = 'load-update-core.php';
+
+		if (function_exists('wp_clean_update_cache')) {
+			wp_clean_update_cache();
+		} else {
+			$this->settings->deleteTransient('update_plugins');
+			$this->settings->deleteTransient('update_themes');
+			$this->settings->deleteTransient('update_core');
+		}
+
+		wp_update_plugins();
+		wp_update_themes();
+
+		array_pop($wp_current_filter);
+
+		wp_update_plugins();
+		wp_update_themes();
+
+		wp_version_check();
+		wp_version_check(array(), true);
+
+		return true;
+	}
+
+	function getUsersHandler($args = array()) {
+		$db = $this->db;
+		$table = "{$db->dbprefix()}users";
+		$count = $db->rowsCount($table);
+		$result = array("count" => $count);
+
+		$max_users = array_key_exists('max_users', $args) ? $args['max_users'] : 500;
+		$roles = array_key_exists('roles', $args) ? $args['roles'] : array();
+
+		$users = array();
+		if (($count > $max_users) && !empty($roles)) {
+			foreach ($roles as $role) {
+				if ($max_users <= 0)
+					break;
+				$args['number'] = $max_users;
+				$args['role'] = $role;
+				$fetched = $this->getUsers($args['full'], $args);
+				$max_users -= sizeof($fetched);
+				$users = array_merge($users, $fetched);
+			}
+		} else {
+			$args['number'] = $max_users;
+			$users = $this->getUsers($args['full'], $args);
+		}
+		$result['users_info'] = $users;
+
+		return $result;
+	}
+
+	function getTransient($name, $asarray = true) {
+		$transient = $this->settings->getTransient($name);
+		if ($transient && $asarray)
+			$transient = $this->objectToArray($transient);
+		return array("transient" => $transient);
+	}
+
+	function getPluginsHandler() {
+		return array_merge($this->getPlugins(), $this->getTransient('update_plugins'));
+	}
+
+	function getThemesHandler() {
+		return array_merge($this->getThemes(), $this->getTransient('update_themes'));
+	}
+
+	public function getSiteInfo($args) {
+		$result = array();
+
+		if (array_key_exists('refresh', $args))
+			$result['refreshed'] = $this->refreshUpdatesInfo();
+
+		if (array_key_exists('users', $args))
+			$result['users'] = $this->getUsersHandler($args['users']);
+
+		if (array_key_exists('plugins', $args))
+			$result['plugins'] = $this->getPluginsHandler();
+
+		if (array_key_exists('themes', $args))
+			$result['themes'] = $this->getThemesHandler();
+
+		if (array_key_exists('core', $args))
+			$result['core'] = $this->getTransient('update_core');
+
+		if (array_key_exists('sys', $args))
+			$result['sys'] = $this->getSystemInfo();
+
+		return $result;
+	}
+
 	public function process($request) {
 		$db = $this->db;
 		$params = $request->params;
@@ -284,7 +378,7 @@ class BVInfoCallback extends BVCallbackBase {
 			$resp = $this->getThemes();
 			break;
 		case "gtsym":
-			$resp = $this->getSystemInfo();
+			$resp = array('sys' => $this->getSystemInfo());
 			break;
 		case "gtwp":
 			$resp = $this->getWpInfo();
@@ -303,13 +397,10 @@ class BVInfoCallback extends BVCallbackBase {
 			$full = false;
 			if (array_key_exists('full', $params))
 				$full = true;
-			$resp = $this->getUsers($full, $params['args']);
+			$resp = array('users' => $this->getUsers($full, $params['args']));
 			break;
 		case "gttrnsnt":
-			$transient = $this->settings->getTransient($params['name']);
-			if ($transient && array_key_exists('asarray', $params))
-				$transient = $this->objectToArray($transient);
-			$resp = array("transient" => $transient);
+			$resp = $this->getTransient($params['name'], array_key_exists('asarray', $params));
 			break;
 		case "gthost":
 			$resp = $this->getHostInfo();
@@ -323,6 +414,9 @@ class BVInfoCallback extends BVCallbackBase {
 			$args = apply_filters('plugins_api_args', $args, $action);
 			$data = apply_filters('plugins_api', false, $action, $args);
 			$resp = array("plugins_info" => $data);
+			break;
+		case "gtsteinfo":
+			$resp = $this->getSiteInfo($params);
 			break;
 		default:
 			$resp = false;
