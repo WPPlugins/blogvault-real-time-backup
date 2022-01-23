@@ -11,7 +11,7 @@
 	<div class="row">
 		<div class="col-xs-12 form-container">
 			<div class="search-container text-center ">
-			<form action="<?php echo $this->bvinfo->appUrl(); ?>/plugin/bvstart" style="padding-top:10px; margin: 0px;" onsubmit="document.getElementById('get-started').disabled = true;"  method="post" name="signup">
+			<form action="<?php echo $this->bvinfo->appUrl(); ?>/plugin/signup" style="padding-top:10px; margin: 0px;" onsubmit="document.getElementById('get-started').disabled = true;"  method="post" name="signup">
 				<input type='hidden' name='bvsrc' value='wpplugin'/>
 				<?php echo $this->siteInfoTags(); ?>
 				<input type="text" placeholder="Enter your email address to continue" id="email" name="email" class="search" required>
