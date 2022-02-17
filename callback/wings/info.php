@@ -10,7 +10,7 @@ class BVInfoCallback extends BVCallbackBase {
 	public $bvinfo;
 	public $bvapi;
 	
-	const INFO_WING_VERSION = 1.2;
+	const INFO_WING_VERSION = 1.3;
 
 	public function __construct($callback_handler) {
 		$this->db = $callback_handler->db;
@@ -333,6 +333,12 @@ class BVInfoCallback extends BVCallbackBase {
 	function getSiteInfo($args) {
 		$result = array();
 
+		if (array_key_exists('pre_refresh_get_options', $args)) {
+			$result['pre_refresh_get_options'] = $this->settings->getOptions(
+					$args['pre_refresh_get_options']
+			);
+		}
+
 		if (array_key_exists('refresh', $args))
 			$result['refreshed'] = $this->refreshUpdatesInfo();
 
@@ -350,6 +356,9 @@ class BVInfoCallback extends BVCallbackBase {
 
 		if (array_key_exists('sys', $args))
 			$result['sys'] = $this->getSystemInfo();
+
+		if (array_key_exists('get_options', $args))
+			$result['get_options'] = $this->settings->getOptions($args['get_options']);
 
 		return $result;
 	}
