@@ -7,67 +7,81 @@ if (!class_exists('BVCallbackRequest')) :
 		public $method;
 		public $wing;
 		public $is_afterload;
+		public $is_update_core_page;
+		public $pagenow;
+		public $is_aftershutdown;
+		public $keep_page_output;
 		public $is_admin_ajax;
 		public $is_debug;
 		public $account;
-		public $calculated_mac;
+		public $settings;
 		public $sig;
+		public $sighshalgo;
 		public $time;
 		public $version;
 		public $is_sha1;
 		public $bvb64stream;
 		public $bvb64cksize;
 		public $checksum;
+		public $error = array();
+		public $pubkey_name;
+		public $bvprmsmac;
+		public $bvboundry;
 
-		public function __construct($account, $in_params) {
+		private static $SIG_HASH_ALGO_MAP = array(
+			'1' => OPENSSL_ALGO_SHA1,
+			'7' => OPENSSL_ALGO_SHA256
+		);
+
+		public function __construct($account, $in_params, $settings) {
 			$this->params = array();
 			$this->account = $account;
+			$this->settings = $settings;
 			$this->wing = $in_params['wing'];
 			$this->method = $in_params['bvMethod'];
 			$this->is_afterload = array_key_exists('afterload', $in_params);
+			$this->is_update_core_page = array_key_exists('updtcrpge', $in_params);
+			$allowed = array('update-core.php', 'plugins.php', 'themes.php', 'update.php');
+			$pagenow = isset($in_params['pagenow']) && is_string($in_params['pagenow']) ? $in_params['pagenow'] : null;
+			$this->pagenow = in_array($pagenow, $allowed, true) ? $pagenow : null;
+			$this->is_aftershutdown = array_key_exists('aftershutdown', $in_params);
+			$this->keep_page_output = $this->is_aftershutdown &&
+				array_key_exists('keeppageoutput', $in_params);
 			$this->is_admin_ajax = array_key_exists('adajx', $in_params);
 			$this->is_debug = array_key_exists('bvdbg', $in_params);
 			$this->sig = $in_params['sig'];
+			$this->sighshalgo = !empty($in_params['sighshalgo']) ? $in_params['sighshalgo'] : '1';
 			$this->time = intval($in_params['bvTime']);
 			$this->version = $in_params['bvVersion'];
 			$this->is_sha1 = array_key_exists('sha1', $in_params);
 			$this->bvb64stream = isset($in_params['bvb64stream']);
-			$this->bvb64cksize = array_key_exists('bvb64cksize', $in_params) ? intval($in_params['bvb64cksize']) : false;
+			$this->bvb64cksize = array_key_exists('bvb64cksize', $in_params) ? intval($in_params['bvb64cksize']) : 0;
 			$this->checksum = array_key_exists('checksum', $in_params) ? $in_params['checksum'] : false;
+			$this->pubkey_name = !empty($in_params['pubkeyname']) ?
+					BVAccount::sanitizeKey($in_params['pubkeyname']) : 'm_public';
+			$this->bvprmsmac = !empty($in_params['bvprmsmac']) ? BVAccount::sanitizeKey($in_params['bvprmsmac']) : "";
+			$this->bvboundry = !empty($in_params['bvboundry']) ? $in_params['bvboundry'] : "";
 		}
 
 		public function isAPICall() {
 			return array_key_exists('apicall', $this->params);
 		}
 
-		public function curlRequest($url, $body) {
-			$ch = curl_init($url);
-			curl_setopt($ch, CURLOPT_POST, 1);
-			curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-			curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($body));
-			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-			return curl_exec($ch);
-		}
-
-		public function fileGetContentRequest($url, $body) {
-			$options = array(
-				'http' => array(
-					'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
-					'method'  => 'POST',
-					'content' => http_build_query($body)
-				)
-			);
-
-			$context  = stream_context_create($options);
-			return file_get_contents($url, false, $context);
-		}
-
 		public function http_request($url, $body) {
-			if (in_array('curl', get_loaded_extensions())) {
-				return $this->curlRequest($url, $body);
-			} else {
-				return $this->fileGetContentRequest($url, $body);
-			} 
+			$body = http_build_query($body);
+			$response = wp_remote_post($url, array(
+				'body' => $body,
+				'timeout' => 15,
+				'headers' => array(
+					'Content-Type' => 'application/x-www-form-urlencoded',
+				),
+			));
+
+			if (is_wp_error($response)) {
+				return false;
+			}
+
+			return wp_remote_retrieve_body($response);
 		}
 
 		public function get_params_via_api($params_key, $apiurl) {
@@ -84,7 +98,8 @@ if (!class_exists('BVCallbackRequest')) :
 			$info = array(
 				"requestedsig" => $this->sig,
 				"requestedtime" => $this->time,
-				"requestedversion" => $this->version
+				"requestedversion" => $this->version,
+				"error" => $this->error
 			);
 			if ($this->is_debug) {
 				$info["inreq"] = $this->params;
@@ -95,8 +110,11 @@ if (!class_exists('BVCallbackRequest')) :
 			if ($this->is_afterload) {
 				$info["afterload"] = true;
 			}
-			if ($this->calculated_mac) {
-				$info["calculated_mac"] = $this->calculated_mac;
+			if ($this->is_aftershutdown) {
+				$info["aftershutdown"] = true;
+			}
+			if ($this->keep_page_output) {
+				$info["keeppageoutput"] = true;
 			}
 			return $info;
 		}
@@ -128,19 +146,14 @@ if (!class_exists('BVCallbackRequest')) :
 				}
 			}
 
-			if (array_key_exists('bvprms', $in_params) && isset($in_params['bvprms']) &&
-					array_key_exists('bvprmsmac', $in_params) && isset($in_params['bvprmsmac'])) {
-				$digest_algo = 'SHA1';
-				$sent_mac = BVAccount::sanitizeKey($in_params['bvprmsmac']);
-
-				if (array_key_exists('bvprmshshalgo', $in_params) && isset($in_params['bvprmshshalgo'])) {
-					$digest_algo = $in_params['bvprmshshalgo'];
+			if (array_key_exists('bvprms', $in_params) && isset($in_params['bvprms'])) {
+				if (!empty($in_params['bvprmshshalgo']) && $in_params['bvprmshshalgo'] === 'sha256') {
+					$calculated_mac = hash_hmac('SHA256', $in_params['bvprms'], $this->account->secret);
+				} else {
+					$calculated_mac = hash_hmac('SHA1', $in_params['bvprms'], $this->account->secret);
 				}
 
-				$calculated_mac = hash_hmac($digest_algo, $in_params['bvprms'], $this->account->secret);
-				$this->calculated_mac = substr($calculated_mac, 0, 6);
-
-				if ($this->compare_mac($sent_mac, $calculated_mac) === true) {
+				if ($this->compare_mac($this->bvprmsmac, $calculated_mac) === true) {
 
 					if (array_key_exists('b64', $in_params)) {
 						foreach ($in_params['b64'] as $key) {
@@ -181,14 +194,14 @@ if (!class_exists('BVCallbackRequest')) :
 					}
 
 					if (array_key_exists('memset', $in_params)) {
-						$val = intval(urldecode($in_params['memset']));
+						$val = intval($in_params['memset']);
+						// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Required for memory limit adjustment
 						@ini_set('memory_limit', $val.'M');
 					}
 
 					return $params;
 				}
 			}
-
 			return false;
 		}
 
@@ -216,6 +229,99 @@ if (!class_exists('BVCallbackRequest')) :
 			}
 
 			return $data;
+		}
+
+		public function authenticate() {
+			if (!$this->account) {
+				$this->error["message"] = "ACCOUNT_NOT_FOUND";
+				return false;
+			}
+
+			$bv_last_recv_time = $this->settings->getOption('bvLastRecvTime');
+			if ($this->time < intval($bv_last_recv_time) - 300) {
+				return false;
+			}
+
+			$data = $this->method.$this->account->secret.$this->time.$this->version.$this->bvprmsmac;
+			if (!$this->verify($data, base64_decode($this->sig), $this->sighshalgo)) {
+				return false;
+			}
+			$this->settings->updateOption('bvLastRecvTime', $this->time);
+
+			return 1;
+		}
+
+		public function verify($data, $sig, $sighshalgo) {
+			if (!function_exists('openssl_verify') || !function_exists('openssl_pkey_get_public')) {
+				$this->error["message"] = "OPENSSL_FUNCS_NOT_FOUND";
+				return false;
+			}
+
+			$openssl_algo = array_key_exists($sighshalgo, self::$SIG_HASH_ALGO_MAP) ? self::$SIG_HASH_ALGO_MAP[$sighshalgo] : null;
+			if ($openssl_algo === null) {
+				$this->error["message"] = "UNSUPPORTED_HASH_ALGORITHM: " . $sighshalgo;
+				return false;
+			}
+
+			$key_file = dirname( __DIR__ ) . '/public_keys/' . $this->pubkey_name . '.pub';
+			if (!file_exists($key_file)) {
+				$this->error["message"] = "PUBLIC_KEY_NOT_FOUND";
+				return false;
+			}
+
+			$public_key_str = BVWPFileSystem::getInstance()->getContents($key_file);
+
+			$public_key = openssl_pkey_get_public($public_key_str);
+			if (!$public_key) {
+				$this->error["message"] = "UNABLE_TO_LOAD_PUBLIC_KEY";
+				return false;
+			}
+
+			$verify = openssl_verify($data, $sig, $public_key, $openssl_algo);
+			if ($verify === 1) {
+				return true;
+			} elseif ($verify === 0) {
+				$this->error["message"] = "INCORRECT_SIGNATURE";
+				$this->error["pubkey_sig"] = substr(hash('md5', $public_key_str), 0, 8);
+			} else {
+				$this->error["message"] = "OPENSSL_VERIFY_FAILED";
+			}
+			return false;
+		}
+
+		public function corruptedParamsResp() {
+			$bvinfo = new BVInfo($this->settings);
+
+			return array(
+				"account_info" => $this->account->info(),
+				"request_info" => $this->info(),
+				"bvinfo" => $bvinfo->info(),
+				"statusmsg" => "BVPRMS_CORRUPTED"
+			);
+		}
+
+		public function authFailedResp() {
+			$api_public_key = BVAccount::getApiPublicKey($this->settings);
+			$default_account_pubkey = BVAccount::getDefaultPublicKey();
+			$bvinfo = new BVInfo($this->settings);
+			$resp = array(
+				"request_info" => $this->info(),
+				"bvinfo" => $bvinfo->info(),
+				"statusmsg" => "FAILED_AUTH",
+				"api_pubkey" => substr($api_public_key, 0, 8)
+			);
+
+			if (is_string($default_account_pubkey) && strlen($default_account_pubkey) >= 32) {
+				$resp["default_account_pubkey"] = substr($default_account_pubkey, 0, 8);
+			}
+
+			if ($this->account) {
+				$resp["account_info"] = $this->account->info();
+			} else {
+				$resp["account_info"] = array("error" => "ACCOUNT_NOT_FOUND");
+			}
+
+			return $resp;
 		}
 	}
 endif;

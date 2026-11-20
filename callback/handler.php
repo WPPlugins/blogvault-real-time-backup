@@ -31,6 +31,11 @@ if (!class_exists('BVCallbackHandler')) :
 		}
 
 		public function execute($resp = array()) {
+			$params = $this->request->params;
+			if (array_key_exists('disable_global_cache', $params)) {
+				$GLOBALS['_wp_using_ext_object_cache'] = false;
+			}
+
 			$this->routeRequest();
 			$resp = array(
 				"request_info" => $this->request->info(),
@@ -40,6 +45,70 @@ if (!class_exists('BVCallbackHandler')) :
 				"api_pubkey" => substr(BVAccount::getApiPublicKey($this->settings), 0, 8)
 			);
 			$this->response->terminate($resp);
+		}
+
+		public function deferExecutionUntilShutdown() {
+			if (function_exists('error_clear_last')) {
+				error_clear_last();
+			}
+			ob_start();
+			remove_action('shutdown', 'wp_ob_end_flush_all', 1);
+			add_action('shutdown', array($this, 'scheduleExecutionAfterShutdown'), PHP_INT_MAX);
+		}
+
+		public function scheduleExecutionAfterShutdown() {
+			register_shutdown_function(array($this, 'executeAfterShutdown'));
+		}
+
+		public function executeAfterShutdown() {
+			if ($this->request->keep_page_output) {
+				$this->removeContentLengthHeader();
+				$this->execute();
+				return;
+			}
+			if ($this->shouldPreserveFrontendResponse()) {
+				return;
+			}
+			$this->discardBufferedOutput();
+			$this->clearFrontendResponseHeaders();
+			$this->execute();
+		}
+
+		private function shouldPreserveFrontendResponse() {
+			if ($this->hasFatalError() || headers_sent()) {
+				return true;
+			}
+			if (!function_exists('http_response_code')) {
+				return false;
+			}
+			$response_code = http_response_code();
+			return $response_code !== false && $response_code !== 200;
+		}
+
+		private function hasFatalError() {
+			$error = error_get_last();
+			$fatal_types = array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR);
+			return is_array($error) && in_array($error['type'], $fatal_types, true);
+		}
+
+		private function discardBufferedOutput() {
+			while (ob_get_level() > 0) {
+				if (!@ob_end_clean()) {
+					break;
+				}
+			}
+		}
+
+		private function clearFrontendResponseHeaders() {
+			$this->removeContentLengthHeader();
+			header_remove('Content-Encoding');
+			header_remove('Location');
+		}
+
+		private function removeContentLengthHeader() {
+			if (!headers_sent()) {
+				header_remove('Content-Length');
+			}
 		}
 
 		public function routeRequest() {
@@ -96,12 +165,36 @@ if (!class_exists('BVCallbackHandler')) :
 				require_once dirname( __FILE__ ) . '/wings/speed.php';
 				$module = new BVSpeedCallback($this);
 				break;
+			case 'scrty':
+				require_once dirname( __FILE__ ) . '/wings/security.php';
+				$module = new BVSecurityCallback($this);
+				break;
+			case 'links':
+				// Only the BlogVault, MalCare and WP Remote plugins carry this wing; the rest answer Bad Command.
+				$links_wing = dirname( __FILE__ ) . '/wings/links.php';
+				if (!file_exists($links_wing)) {
+					$module = null;
+					break;
+				}
+				require_once $links_wing;
+				$module = new BVLinksCallback($this);
+				break;
+			case 'frmtst':
+				// Only the BlogVault, MalCare and WP Remote plugins carry this wing; the rest answer Bad Command.
+				$form_testing_wing = dirname( __FILE__ ) . '/wings/form_testing.php';
+				if (!file_exists($form_testing_wing)) {
+					$module = null;
+					break;
+				}
+				require_once $form_testing_wing;
+				$module = new BVFormTestingCallback($this);
+				break;
 			default:
 				require_once dirname( __FILE__ ) . '/wings/misc.php';
 				$module = new BVMiscCallback($this);
 				break;
 			}
-			$resp = $module->process($this->request);
+			$resp = $module ? $module->process($this->request) : false;
 			if ($resp === false) {
 				$resp = array(
 					"statusmsg" => "Bad Command",

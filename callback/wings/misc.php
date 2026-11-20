@@ -11,7 +11,7 @@ class BVMiscCallback extends BVCallbackBase {
 	public $bvapi;
 	public $db;
 
-	const MISC_WING_VERSION = 1.1;
+	const MISC_WING_VERSION = 1.6;
 
 	public function __construct($callback_handler) {
 		$this->settings = $callback_handler->settings;
@@ -152,8 +152,24 @@ class BVMiscCallback extends BVCallbackBase {
 			phpinfo();
 			die();
 			break;
+		case "wpnonce":
+			$resp = array("wpnonce" => wp_create_nonce($params["wpnonce_action"]));
+			break;
 		case "dlttrsnt":
 			$resp = array("dlttrsnt" => $settings->deleteTransient($params['key']));
+			break;
+		case "optns":
+			$resp = array();
+
+			if (array_key_exists("get_options", $params))
+				$resp["get_options"] = $settings->getOptions($params["get_options"]);
+
+			if (array_key_exists("update_options", $params))
+				$resp["update_options"] = $settings->updateOptions($params["update_options"]);
+
+			if (array_key_exists("delete_options", $params))
+				$resp["delete_options"] = $settings->deleteOptions($params["delete_options"]);
+
 			break;
 		case "setbvss":
 			$resp = array("status" => $settings->updateOption('bv_site_settings', $params['bv_site_settings']));
@@ -190,6 +206,51 @@ class BVMiscCallback extends BVCallbackBase {
 				$resp['taxonomy_cp_results'] = $taxonomy_result['taxonomy_data'];
 				$resp['taxonomies'] = $taxonomy_result['taxonomies'];
 			}
+			break;
+
+		case "get_post_ids":
+			if (array_key_exists('urls', $params)) {
+				$resp = array();
+				foreach ( $params['urls'] as $url ) {
+					$resp[$url] = url_to_postid($url);
+				}
+			}
+			break;
+
+		case "permalink":
+			if (array_key_exists('post_ids', $params)) {
+				$resp = array();
+				foreach ( $params['post_ids'] as $id ) {
+					$resp[$id]['url'] = get_permalink($id);
+				}
+			}
+			break;
+		case "stwplpwhtlbl":
+			$option = $bvinfo->wp_lp_whitelabel_option;
+			$info = array();
+
+			if (isset($params['logoFile'])) {
+				$info['logo'] = $params['logoFile'];
+			}
+
+			if (isset($params['label'])) {
+				$info['label'] = $params['label'];
+			}
+
+			if (isset($params['errorMessage'])) {
+				$info['2fa_error_message'] = $params['errorMessage'];
+			}
+
+			if (isset($params['tooltip'])) {
+				$info['2fa_tooltip'] = $params['tooltip'];
+			}
+
+			$resp = array("status" => $settings->updateOption($option, $info));
+			break;
+		case "dsblwplpwhtlbl":
+			$option = $bvinfo->wp_lp_whitelabel_option;
+			$settings->deleteOption($option);
+			$resp = array("status" => !$settings->getOption($option));
 			break;
 		default:
 			$resp = false;

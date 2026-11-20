@@ -24,8 +24,8 @@ class BVWPAdmin {
 		}
 	}
 
-	function removeAdminNotices() {
-		if (array_key_exists('page', $_REQUEST) && $_REQUEST['page'] == $this->bvinfo->plugname) {
+	public function removeAdminNotices() {
+		if (BVHelper::getRawParam('REQUEST', 'page') === $this->bvinfo->plugname) {
 			remove_all_actions('admin_notices');
 			remove_all_actions('all_admin_notices');
 		}
@@ -34,53 +34,77 @@ class BVWPAdmin {
 	public function initHandler() {
 		if (!current_user_can('activate_plugins'))
 			return;
+		$bvnonce = BVHelper::getRawParam('REQUEST', 'bvnonce');
+		$blogvaultkey = BVHelper::getRawParam('REQUEST', 'blogvaultkey');
+		$blogvaultkey = $blogvaultkey ? BVAccount::sanitizeKey($blogvaultkey) : "";
 
-		if (array_key_exists('bvnonce', $_REQUEST) &&
-				wp_verify_nonce($_REQUEST['bvnonce'], "bvnonce") &&
-				array_key_exists('blogvaultkey', $_REQUEST) &&
-				(strlen($_REQUEST['blogvaultkey']) == 64) &&
-				(array_key_exists('page', $_REQUEST) &&
-				$_REQUEST['page'] == $this->bvinfo->plugname)) {
-			$keys = str_split($_REQUEST['blogvaultkey'], 32);
+		if ($bvnonce && wp_verify_nonce($bvnonce, "bvnonce") &&
+			$blogvaultkey && strlen($blogvaultkey) == 64 &&
+			(BVHelper::getRawParam('REQUEST', 'page') === $this->bvinfo->plugname)) {
+			$keys = str_split($blogvaultkey, 32);
 			BVAccount::addAccount($this->settings, $keys[0], $keys[1]);
-			if (array_key_exists('redirect', $_REQUEST)) {
-				$location = $_REQUEST['redirect'];
+
+			$location = BVHelper::getStringParamSanitized('REQUEST', 'redirect', 'url');
+			if ($location) {
 				wp_redirect($this->bvinfo->appUrl()."/dash/redir?q=".urlencode($location));
 				exit();
 			}
 		}
+
 		if ($this->bvinfo->isActivateRedirectSet()) {
 			$this->settings->updateOption($this->bvinfo->plug_redirect, 'no');
 			##ACTIVATEREDIRECTCODE##
-			wp_redirect($this->mainUrl());
+			if (!wp_doing_ajax()) {
+				wp_redirect($this->mainUrl());
+			}
 		}
 	}
 
 	public function bvsecAdminMenu($hook) {
-		if ($hook === 'toplevel_page_bvbackup' || preg_match("/bv_add_account$/", $hook) || preg_match("/bv_account_details$/", $hook)) {
-			wp_enqueue_style( 'bvsurface', plugins_url('css/bvmui.min.css', __FILE__));
-			wp_enqueue_style( 'bootstrap', plugins_url('css/bootstrap.min.css', __FILE__));
-			wp_enqueue_style( 'bvplugin', plugins_url('css/bvplugin.min.css', __FILE__));
+		if ($hook === 'toplevel_page_bvbackup' || BVHelper::safePregMatch("/bv_add_account$/", $hook) ||
+				BVHelper::safePregMatch("/bv_account_details$/", $hook)) {
+			wp_enqueue_style( 'bootstrap', plugins_url('css/bootstrap.min.css', __FILE__), array(), $this->bvinfo->version);
+			wp_enqueue_style( 'bvplugin', plugins_url('css/bvplugin.min.css', __FILE__), array(), $this->bvinfo->version);
+			wp_enqueue_script( 'bv-connection-key', plugins_url('js/connection-key.js', __FILE__), array(), $this->bvinfo->version, true);
 		}
 	}
 
 	public function menu() {
-		$brand = $this->bvinfo->getBrandInfo();
-		if (!$brand || (!array_key_exists('hide', $brand) && !array_key_exists('hide_from_menu', $brand))) {
+		$brand = $this->bvinfo->getPluginWhitelabelInfo();
+		$can_whitelabel = $this->bvinfo->canWhiteLabel();
+		$hide_from_menu = array_key_exists('hide', $brand) || array_key_exists('hide_from_menu', $brand);
+		if (!$can_whitelabel || !$hide_from_menu) {
 			$bname = $this->bvinfo->getBrandName();
 			$icon = $this->bvinfo->getBrandIcon();
 			add_menu_page($bname, $bname, 'manage_options', $this->bvinfo->plugname,
-					array($this, 'adminPage'), plugins_url($icon,  __FILE__ ));
+					array($this, 'adminPage'), plugins_url($icon,  __FILE__));
 		}
 	}
 
-	public function hidePluginDetails($plugin_metas, $slug) {
-		$brand = $this->bvinfo->getBrandInfo();
-		$bvslug = $this->bvinfo->slug;
+	public function hidePluginUpdate($plugins) {
+		if (!$this->bvinfo->canWhiteLabel()) {
+			return $plugins;
+		}
+		$whitelabel_infos = $this->bvinfo->getPluginsWhitelabelInfos();
+		foreach ($whitelabel_infos as $slug => $brand) {
+			if ($this->bvinfo->canWhiteLabel($slug) && isset($plugins->response[$slug]) && is_array($brand)) {
+				if (array_key_exists('hide_from_menu', $brand) || array_key_exists('hide', $brand)) {
+					unset($plugins->response[$slug]);
+				}
+			}
+		}
+		return $plugins;
+	}
 
-		if ($slug === $bvslug && $brand && array_key_exists('hide_plugin_details', $brand)){
+	public function hidePluginDetails($plugin_metas, $slug) {
+		if (!is_array($plugin_metas) || !$this->bvinfo->canWhiteLabel($slug)) {
+			return $plugin_metas;
+		}
+		$whitelabel_info = $this->bvinfo->getPluginWhitelabelInfo($slug);
+		if (array_key_exists('hide_plugin_details', $whitelabel_info)) {
 			foreach ($plugin_metas as $pluginKey => $pluginValue) {
-				if (strpos($pluginValue, sprintf('>%s<', translate('View details')))) {
+				// phpcs:ignore WordPress.WP.I18n.MissingArgDomain
+				if (strpos($pluginValue, sprintf('>%s<', __('View details')))) {
 					unset($plugin_metas[$pluginKey]);
 					break;
 				}
@@ -89,28 +113,60 @@ class BVWPAdmin {
 		return $plugin_metas;
 	}
 
+	public function handlePluginHealthInfo($plugins) {
+		if (!isset($plugins["wp-plugins-active"]) ||
+			!isset($plugins["wp-plugins-active"]["fields"]) || !$this->bvinfo->canWhiteLabel()) {
+			return $plugins;
+		}
+
+		$whitelabel_infos_by_title = $this->bvinfo->getPluginsWhitelabelInfoByTitle();
+
+		foreach ($whitelabel_infos_by_title as $title => $brand) {
+			if (is_array($brand) && array_key_exists('slug', $brand) && $this->bvinfo->canWhiteLabel($brand["slug"])) {
+				if (array_key_exists('hide', $brand)) {
+					unset($plugins["wp-plugins-active"]["fields"][$title]);
+				} else {
+					$plugin = $plugins["wp-plugins-active"]["fields"][$title];
+					$author = $brand['default_author'];
+					if (array_key_exists('name', $brand)) {
+						$plugin["label"] = $brand['name'];
+					}
+					if (array_key_exists('author', $brand)) {
+						$plugin["value"] = str_replace($author, $brand['author'], $plugin["value"]);
+					}
+					if (array_key_exists('description', $brand)) {
+						$plugin["debug"] = str_replace($author, $brand['author'], $plugin["debug"]);
+					}
+					$plugins["wp-plugins-active"]["fields"][$title] = $plugin;
+				}
+			}
+		}
+		return $plugins;
+	}
+
 	public function settingsLink($links, $file) {
 		#XNOTE: Fix this
 		if ( $file == plugin_basename( dirname(__FILE__).'/blogvault.php' ) ) {
-			$brand = $this->bvinfo->getBrandInfo();
-			if (!$brand || !array_key_exists('hide_plugin_details', $brand)) {
-				$links[] = '<a href="'.$this->mainUrl().'">'.__( 'Settings' ).'</a>';
+			$brand = $this->bvinfo->getPluginWhitelabelInfo();
+			if (!array_key_exists('hide_plugin_details', $brand)) {
+				// phpcs:ignore WordPress.WP.I18n.MissingArgDomain
+				$links[] = '<a href="' . $this->mainUrl() . '">' . __('Settings') . '</a>';
 			}
 		}
 		return $links;
 	}
 
 	public function getPluginLogo() {
-		$brand = $this->bvinfo->getBrandInfo();
-		if ($brand && array_key_exists('logo', $brand)) {
+		$brand = $this->bvinfo->getPluginWhitelabelInfo();
+		if (array_key_exists('logo', $brand)) {
 			return $brand['logo'];
 		}
 		return $this->bvinfo->logo;
 	}
 
 	public function getWebPage() {
-		$brand = $this->bvinfo->getBrandInfo();
-		if ($brand && array_key_exists('webpage', $brand)) {
+		$brand = $this->bvinfo->getPluginWhitelabelInfo();
+		if (array_key_exists('webpage', $brand)) {
 			return $brand['webpage'];
 		}
 		return $this->bvinfo->webpage;
@@ -121,18 +177,21 @@ class BVWPAdmin {
 		$bvnonce = wp_create_nonce("bvnonce");
 		$public = BVAccount::getApiPublicKey($this->settings);
 		$secret = BVRecover::defaultSecret($this->settings);
-		$tags = "<input type='hidden' name='url' value='".$this->siteinfo->wpurl()."'/>\n".
-				"<input type='hidden' name='homeurl' value='".$this->siteinfo->homeurl()."'/>\n".
-				"<input type='hidden' name='siteurl' value='".$this->siteinfo->siteurl()."'/>\n".
-				"<input type='hidden' name='dbsig' value='".$this->siteinfo->dbsig(false)."'/>\n".
-				"<input type='hidden' name='plug' value='".$this->bvinfo->plugname."'/>\n".
-				"<input type='hidden' name='adminurl' value='".$this->mainUrl()."'/>\n".
-				"<input type='hidden' name='bvversion' value='".$this->bvinfo->version."'/>\n".
-	 			"<input type='hidden' name='serverip' value='".$_SERVER["SERVER_ADDR"]."'/>\n".
-				"<input type='hidden' name='abspath' value='".ABSPATH."'/>\n".
-				"<input type='hidden' name='secret' value='".$secret."'/>\n".
-				"<input type='hidden' name='public' value='".$public."'/>\n".
-				"<input type='hidden' name='bvnonce' value='".$bvnonce."'/>\n";
+		$ctag = BVRecover::connectionTag($this->settings);
+		$server_ip = BVHelper::getStringParamEscaped('SERVER', 'SERVER_ADDR', 'attr');
+		$tags = "<input type='hidden' name='url' value='".esc_attr($this->siteinfo->wpurl())."'/>\n".
+				"<input type='hidden' name='homeurl' value='".esc_attr($this->siteinfo->homeurl())."'/>\n".
+				"<input type='hidden' name='siteurl' value='".esc_attr($this->siteinfo->siteurl())."'/>\n".
+				"<input type='hidden' name='dbsig' value='".esc_attr($this->siteinfo->dbsig(false))."'/>\n".
+				"<input type='hidden' name='plug' value='".esc_attr($this->bvinfo->plugname)."'/>\n".
+				"<input type='hidden' name='adminurl' value='".esc_attr($this->mainUrl())."'/>\n".
+				"<input type='hidden' name='bvversion' value='".esc_attr($this->bvinfo->version)."'/>\n".
+				"<input type='hidden' name='serverip' value='".$server_ip."'/>\n".
+				"<input type='hidden' name='abspath' value='".esc_attr(ABSPATH)."'/>\n".
+				"<input type='hidden' name='secret' value='".esc_attr($secret)."'/>\n".
+				"<input type='hidden' name='bvctag' value='".esc_attr($ctag)."'/>\n".
+				"<input type='hidden' name='public' value='".esc_attr($public)."'/>\n".
+				"<input type='hidden' name='bvnonce' value='".esc_attr($bvnonce)."'/>\n";
 		return $tags;
 	}
 
@@ -141,7 +200,7 @@ class BVWPAdmin {
 		if (!BVAccount::isConfigured($this->settings) && $hook_suffix == 'index.php' ) {
 ?>
 			<div id="message" class="updated" style="padding: 8px; font-size: 16px; background-color: #dff0d8">
-						<a class="button-primary" href="<?php echo $this->mainUrl(); ?>">Activate BlogVault</a>
+						<a class="button-primary" href="<?php echo esc_url($this->mainUrl()); ?>">Activate BlogVault</a>
 						&nbsp;&nbsp;&nbsp;<b>Almost Done:</b> Activate your BlogVault account to backup & secure your site.
 			</div>
 <?php
@@ -157,14 +216,22 @@ class BVWPAdmin {
 	}
 
 	public function adminPage() {
-		if (isset($_REQUEST['bvnonce']) && wp_verify_nonce( $_REQUEST['bvnonce'], 'bvnonce' )) {
+		$bvnonce = BVHelper::getRawParam('REQUEST', 'bvnonce');
+		if (isset($bvnonce) && wp_verify_nonce($bvnonce, 'bvnonce')) {
 			$info = array();
 			$this->siteinfo->basic($info);
-			$this->bvapi->pingbv('/bvapi/disconnect', $info, $_REQUEST['pubkey']);
-			BVAccount::remove($this->settings, $_REQUEST['pubkey']);
+
+			$pubkey = BVHelper::getRawParam('REQUEST', 'pubkey');
+			if (!empty($pubkey)) {
+				$pubkey = BVAccount::sanitizeKey($pubkey);
+				$this->bvapi->pingbv('/bvapi/disconnect', $info, $pubkey);
+				BVAccount::remove($this->settings, $pubkey);
+			}
 		}
 		if (BVAccount::isConfigured($this->settings)) {
-			if (isset($_REQUEST['add_account'])) {
+			if (isset($_REQUEST['account_details'])) {
+				$this->showAccountDetailsPage();
+			} else if (isset($_REQUEST['add_account'])) {
 				$this->showAddAccountPage();
 			} else {
 				$this->showAccountDetailsPage();
@@ -174,15 +241,16 @@ class BVWPAdmin {
 		}
 	}
 
-	public function initBranding($plugins) {
-		$slug = $this->bvinfo->slug;
 
-		if (!is_array($plugins) || !isset($slug, $plugins)) {
+	public function initWhitelabel($plugins) {
+		if (!is_array($plugins) || !$this->bvinfo->canWhiteLabel()) {
 			return $plugins;
 		}
-
-		$brand = $this->bvinfo->getBrandInfo();
-		if ($brand) {
+		$whitelabel_infos = $this->bvinfo->getPluginsWhitelabelInfos();
+		foreach ($whitelabel_infos as $slug => $brand) {
+			if (!isset($slug) || !$this->bvinfo->canWhiteLabel($slug) || !array_key_exists($slug, $plugins) || !is_array($brand)) {
+				continue;
+			}
 			if (array_key_exists('hide', $brand)) {
 				unset($plugins[$slug]);
 			} else {

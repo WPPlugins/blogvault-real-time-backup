@@ -1,5 +1,5 @@
 <?php $parentClassName = $this->bvinfo->isMalcare() ? "malcare" : "blogvault"; ?>
-<div class="<?php echo $parentClassName; ?>">
+<div class="<?php echo esc_attr($parentClassName); ?>">
 	<div id="main-page">
 		<section id="header">
 			<div class="custom-container">

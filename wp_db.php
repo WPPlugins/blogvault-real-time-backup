@@ -1,5 +1,5 @@
 <?php
-
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVWPDb')) :
 
@@ -40,6 +40,21 @@ class BVWPDb {
 		return $wpdb->get_col($query, $col);
 	}
 
+	public function getLastRowId($col_name, $table_name) {
+		$query = "SELECT MAX($col_name) AS last_id FROM $table_name";
+		$results = $this->getResult($query);
+		if (empty($results) || !is_array($results) || !is_array($results[0]) ||
+				!array_key_exists("last_id", $results[0])) {
+			return null;
+		}
+		$last_id = $results[0]['last_id'];
+		if ($last_id === null) {
+			return 0;
+		} else if (is_numeric($last_id) === true) {
+			return (int) $last_id;
+		}
+	}
+
 	public function tableName($table) {
 		return $table[0];
 	}
@@ -49,6 +64,7 @@ class BVWPDb {
 		return array_map(array($this, 'tableName'), $tables);
 	}
 
+
 	public function showTableStatus() {
 		return $this->getResult("SHOW TABLE STATUS");
 	}
@@ -57,8 +73,21 @@ class BVWPDb {
 		return $this->getResult("SHOW KEYS FROM $table;");
 	}
 
+	public function showDbVariables($variable) {
+		$variables = $this->getResult("Show variables like '%$variable%' ;");
+		$result = array();
+		foreach ($variables as $variable) {
+			$result[$variable["Variable_name"]] = $variable["Value"];
+		}
+		return $result;
+	}
+
 	public function describeTable($table) {
 		return $this->getResult("DESCRIBE $table;");
+	}
+
+	public function showTableIndex($table) {
+		return $this->getResult("SHOW INDEX FROM $table");
 	}
 
 	public function checkTable($table, $type) {
@@ -83,13 +112,21 @@ class BVWPDb {
 		if (!$this->isTablePresent($table)) {
 			if ($usedbdelta) {
 				if (!function_exists('dbDelta'))
-					require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+					require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 				dbDelta($query);
 			} else {
 				$this->query($query);
 			}
 		}
 		return $this->isTablePresent($table);
+	}
+
+	public function createTables($tables, $usedbdelta = false) {
+		$result = array();
+		foreach ($tables as $table => $query) {
+			$result[$table] = $this->createTable($query, $table, $usedbdelta);
+		}
+		return $result;
 	}
 
 	public function alterBVTable($query, $name) {
@@ -99,6 +136,14 @@ class BVWPDb {
 			$resp = $this->query($query);
 		}
 		return $resp;
+	}
+
+	public function alterTables($tables) {
+		$result = array();
+		foreach ($tables as $table => $query) {
+			$result[$table] = $this->alterBVTable($query, $table);
+		}
+		return $result;
 	}
 
 	public function getTableContent($table, $fields = '*', $filter = '', $limit = 0, $offset = 0) {
@@ -136,7 +181,7 @@ class BVWPDb {
 			return false;
 		}
 	}
-	
+
 	public function deleteBVTableContent($name, $filter = "") {
 		$table = $this->getBVTable($name);
 		if ($this->isTablePresent($table)) {
@@ -154,6 +199,22 @@ class BVWPDb {
 		return !$this->isTablePresent($table);
 	}
 
+	public function dropTables($tables) {
+		$result = array();
+		foreach ($tables as $table) {
+			$result[$table] = $this->dropBVTable($table);
+		}
+		return $result;
+	}
+
+	public function truncateTables($tables) {
+		$result = array();
+		foreach ($tables as $table) {
+			$result[$table] = $this->truncateBVTable($table);
+		}
+		return $result;
+	}
+
 	public function deleteRowsFromtable($name, $count = 1) {
 		$table = $this->getBVTable($name);
 		if ($this->isTablePresent($table)) {
@@ -168,7 +229,13 @@ class BVWPDb {
 		$table = $this->getBVTable($name);
 		return $wpdb->replace($table, $value);
 	}
-	
+
+	public function insertIntoBVTable($name, $value) {
+		global $wpdb;
+		$table = $this->getBVTable($name);
+		return $wpdb->insert($table, $value);
+	}
+
 	public function tinfo($name) {
 		$result = array();
 		$table = $this->getBVTable($name);
@@ -184,8 +251,7 @@ class BVWPDb {
 	}
 
 	public function getMysqlVersion() {
-		global $wpdb;
-		return $wpdb->db_version();
+		return $this->showDbVariables('version')['version'];
 	}
 }
 endif;

@@ -5,11 +5,13 @@ if (!class_exists('BVManageCallback')) :
 class BVManageCallback extends BVCallbackBase {
 	public $settings;
 	public $skin;
+	public $bvinfo;
 
-	const MANAGE_WING_VERSION = 1.0;
+	const MANAGE_WING_VERSION = 2.0;
 
 	public function __construct($callback_handler) {
 		$this->settings = $callback_handler->settings;
+		$this->bvinfo = new BVInfo($this->settings);
 	}
 
 	function getError($err) {
@@ -32,19 +34,28 @@ class BVManageCallback extends BVCallbackBase {
 		}
 	}
 
+	/**
+	 * Load a file with require_once only if it exists, so missing files don't fatal the script.
+	 */
+	function safe_require_once($path) {
+		if ($path && file_exists($path)) {
+			require_once $path;
+		}
+	}
+
 	function include_files() {
-		@include_once ABSPATH.'wp-admin/includes/file.php';
-		@include_once ABSPATH.'wp-admin/includes/plugin.php';
-		@include_once ABSPATH.'wp-admin/includes/theme.php';
-		@include_once ABSPATH.'wp-admin/includes/misc.php';
-		@include_once ABSPATH.'wp-admin/includes/template.php';
-		@include_once ABSPATH.'wp-includes/pluggable.php';
-		@include_once ABSPATH.'wp-admin/includes/class-wp-upgrader.php';
-		@include_once ABSPATH.'wp-admin/includes/user.php';
-		@include_once ABSPATH.'wp-includes/registration.php';
-		@include_once ABSPATH.'wp-admin/includes/upgrade.php';
-		@include_once ABSPATH.'wp-admin/includes/update.php';
-		@require_once ABSPATH.'wp-admin/includes/update-core.php';
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/file.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/plugin.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/theme.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/misc.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/template.php');
+		$this->safe_require_once(ABSPATH.'wp-includes/pluggable.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/class-wp-upgrader.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/class-theme-upgrader.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/class-plugin-upgrader.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/user.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/upgrade.php');
+		$this->safe_require_once(ABSPATH.'wp-admin/includes/update.php');
 	}
 
 	function edit($args) {
@@ -186,9 +197,14 @@ class BVManageCallback extends BVCallbackBase {
 		}
 	}
 
-	function upgrade($params = null, $has_bv_skin = false) {
+	function upgrade($params = null, $has_bv_skin = false, $bv_bulk_upgrade = false) {
 		$result = array();
 		$premium_upgrades = array();
+		if (array_key_exists('clear_filters', $params)) {
+			$filters = $params['clear_filters'];
+			foreach ($filters as $filter)
+				remove_all_filters($filter);
+		}
 		if (array_key_exists('core', $params) && !empty($params['core'])) {
 			$result['core'] = $this->upgradeCore($params['core']);
 		}
@@ -196,22 +212,10 @@ class BVManageCallback extends BVCallbackBase {
 			$result['translations'] = $this->upgradeTranslations($params['translations'], $has_bv_skin);
 		}
 		if (array_key_exists('plugins', $params) && !empty($params['plugins'])) {
-			$files = array();
-			foreach ($params['plugins'] as $plugin) {
-				$files[] = $plugin['file'];
-			}
-			if (!empty($files)) {
-				$result['plugins'] = $this->upgradePlugins($files, $has_bv_skin);
-			}
+			$result['plugins'] = $this->upgradePlugins($params['plugins'], $has_bv_skin, $bv_bulk_upgrade);
 		}
 		if (array_key_exists('themes', $params) && !empty($params['themes'])) {
-			$stylesheets = array();
-			foreach ($params['themes'] as $theme) {
-				$stylesheets[] = $theme['stylesheet'];
-			}
-			if (!empty($stylesheets)) {
-				$result['themes'] = $this->upgradeThemes($stylesheets, $has_bv_skin);
-			}
+			$result['themes'] = $this->upgradeThemes($params['themes'], $has_bv_skin, $bv_bulk_upgrade);
 		}
 		return $result;
 	}
@@ -269,13 +273,52 @@ class BVManageCallback extends BVCallbackBase {
 
 	function upgradeCore($args) {
 		global $wp_filesystem, $wp_version;
-		$core = $this->settings->getTransient('update_core');
-		$core_update_index = intval($args['coreupdateindex']);
-		if (isset($core->updates) && !empty($core->updates)) {
-			$to_update = $core->updates[$core_update_index];
+		$to_update = null;
+		
+		// Prefer validated update data from server (BlogVault), then site transient.
+		// This protects upgrades from poisoned/overridden transients.
+		$validated = null;
+		if (isset($args['core_validated_update']) && !empty($args['core_validated_update'])) {
+			$validated = $args['core_validated_update'];
+		}
+
+		if (!empty($validated) && is_array($validated) &&
+			isset($validated['version']) && !empty($validated['version']) &&
+			isset($validated['response']) && ($validated['response'] === 'upgrade')) {
+			$to_update = new stdClass();
+			$to_update->version = $validated['version'];
+			$to_update->response = $validated['response'];
+			$to_update->download = isset($validated['download']) ? $validated['download'] : '';
+
+			// Preserve all packages keys if provided; Core_Upgrader expects packages-like data.
+			if (isset($validated['packages']) && is_array($validated['packages'])) {
+				$to_update->packages = (object)$validated['packages'];
+			} else {
+				$to_update->packages = new stdClass();
+			}
+
+			// WordPress uses either ->package or ->packages->full depending on path/version.
+			if (isset($to_update->packages->full) && !empty($to_update->packages->full)) {
+				$to_update->package = $to_update->packages->full;
+			} else {
+				$to_update->package = $to_update->download;
+				$to_update->packages->full = $to_update->download;
+			}
 		} else {
+			// Fallback to transient-based approach
+			$core = $this->settings->getTransient('update_core');
+			$core_update_index = intval($args['coreupdateindex']);
+			if (isset($core->updates) && !empty($core->updates)) {
+				$to_update = $core->updates[$core_update_index];
+			} else {
+				return array('status' => "Error", "message" => "Updates not available");
+			}
+		}
+		
+		if (!$to_update) {
 			return array('status' => "Error", "message" => "Updates not available");
 		}
+		
 		$resp = array("Core_Upgrader", class_exists('Core_Upgrader'));
 		if (version_compare($wp_version, '3.1.9', '>')) {
 			$core   = new Core_Upgrader();
@@ -286,16 +329,6 @@ class BVManageCallback extends BVCallbackBase {
 				return array('status' => 'Done');
 			}
 		} else {
-			$resp = array("wp_update_core", function_exists('wp_update_core'));
-			if (function_exists('wp_update_core')) {
-				$result = wp_update_core($to_update);
-				if (is_wp_error($result)) {
-					return array('status' => "Error", "message" => $this->getError($result));
-				} else {
-					return array('status' => 'Done');
-				}
-			}
-
 			$resp = array("WP_Upgrader", class_exists('WP_Upgrader'));
 			if (class_exists('WP_Upgrader')) {
 				$upgrader = new WP_Upgrader();
@@ -335,6 +368,7 @@ class BVManageCallback extends BVCallbackBase {
 
 				$wp_filesystem->chmod($wp_dir.'wp-admin/includes/update-core.php', FS_CHMOD_FILE);
 
+				$this->safe_require_once(ABSPATH.'wp-admin/includes/update-core.php');
 				$result = update_core($working_dir, $wp_dir);
 
 				if (is_wp_error($result)) {
@@ -345,32 +379,314 @@ class BVManageCallback extends BVCallbackBase {
 		}
 	}
 
-	function upgradePlugins($plugins, $has_bv_skin = false) {
+	function bv_plugin_bulk_upgrade($upgrader, $_plugins) {
+		global $wp_version;
+		$plugins = array_keys($_plugins);
+		$current = get_site_transient('update_plugins');
+		$args = array();
+		$defaults = array(
+			'clear_update_cache' => true,
+		);
+		$parsed_args = wp_parse_args($args, $defaults);
+		$upgrader->init();
+		$upgrader->bulk = true;
+		$upgrader->upgrade_strings();
+		add_filter('upgrader_clear_destination', array($upgrader, 'delete_old_plugin'), 10, 4);
+		$upgrader->skin->header();
+		$res = $upgrader->fs_connect(array(WP_CONTENT_DIR, WP_PLUGIN_DIR));
+		if (!$res) {
+			$upgrader->skin->footer();
+			return false;
+		}
+		$upgrader->skin->bulk_header();
+		$maintenance = (is_multisite() && ! empty($plugins));
+		foreach ($plugins as $plugin) {
+			$maintenance = $maintenance || (is_plugin_active($plugin));
+		}
+		if ($maintenance) {
+			$upgrader->maintenance_mode(true);
+		}
+		$results = array();
+		$upgrader->update_count = count($plugins);
+		$upgrader->update_current = 0;
+		foreach($plugins as $plugin) {
+			$upgrader->update_current++;
+			$upgrader->skin->plugin_info = get_plugin_data(WP_PLUGIN_DIR . '/' . $plugin, false, true);
+			$upgrader->skin->plugin_active = is_plugin_active($plugin);
+			$plugin_upgrade_data = $_plugins[$plugin];
+			if (isset($current->response[$plugin])) {
+				if (isset($current->response[$plugin]->requires)) {
+					$plugin_upgrade_data['requires'] = $current->response[$plugin]->requires;
+				}
+				if (isset($current->response[$plugin]->requires_php)) {
+					$plugin_upgrade_data['requires_php'] = $current->response[$plugin]->requires_php;
+				}
+			}
+			if ( isset( $plugin_upgrade_data['requires'] ) && function_exists('is_wp_version_compatible') && !is_wp_version_compatible( $plugin_upgrade_data['requires'] ) ) {
+				$result = new WP_Error(
+					'incompatible_wp_required_version',
+					sprintf(
+						__( 'Your WordPress version is %1$s, however the new plugin version requires %2$s.' ),
+						$wp_version,
+						$plugin_upgrade_data['requires']
+					)
+				);
+
+				$upgrader->skin->before( $result );
+				$upgrader->skin->error( $result );
+				$upgrader->skin->after();
+			} elseif ( isset( $plugin_upgrade_data['requires_php'] ) && function_exists('is_php_version_compatible') && !is_php_version_compatible( $plugin_upgrade_data['requires_php'] ) ) {
+
+				$result = new WP_Error(
+					'incompatible_php_required_version',
+					sprintf(
+						__( 'The PHP version on your server is %1$s, however the new plugin version requires %2$s.' ),
+						PHP_VERSION,
+						$plugin_upgrade_data['requires_php']
+					)
+				);
+
+				$upgrader->skin->before( $result );
+				$upgrader->skin->error( $result );
+				$upgrader->skin->after();
+			} else {
+				add_filter('upgrader_source_selection', array($upgrader, 'check_package'));
+				$result = $upgrader->run(
+					array(
+						'package'           => $_plugins[$plugin]['package'],
+						'destination'       => WP_PLUGIN_DIR,
+						'clear_destination' => true,
+						'clear_working'     => true,
+						'is_multi'          => true,
+						'hook_extra'        => array(
+							'plugin' => $plugin,
+						),
+					)
+				);
+				remove_filter('upgrader_source_selection', array($upgrader, 'check_package'));
+			}
+			$results[$plugin] = $result;
+			if (false === $result) {
+				break;
+			}
+		}
+		$upgrader->maintenance_mode(false);
+		wp_clean_plugins_cache($parsed_args['clear_update_cache']);
+		do_action(
+			'upgrader_process_complete',
+			$upgrader,
+			array(
+				'action' => 'update',
+				'type' => 'plugin',
+				'bulk' => true,
+				'plugins' => $plugins,
+			)
+		);
+		$upgrader->skin->bulk_footer();
+		$upgrader->skin->footer();
+		remove_filter('upgrader_clear_destination', array($upgrader, 'delete_old_plugin'));
+		$past_failure_emails = get_option('auto_plugin_theme_update_emails', array());
+		foreach ($results as $plugin => $result) {
+			if (!$result || is_wp_error($result) || !isset($past_failure_emails[$plugin])) {
+				continue;
+			}
+			unset($past_failure_emails[$plugin]);
+		}
+		update_option('auto_plugin_theme_update_emails', $past_failure_emails);
+		return $results;
+	}
+
+	function upgradePlugins($plugins, $has_bv_skin = false, $bv_bulk_upgrade = false) {
 		$result = array();
+		$_plugins = array();
+		$plugins_by_name = array();
+		foreach ($plugins as $plugin) {
+			$_plugins[$plugin['file']] = [
+				'package' => $plugin['package']
+			];
+			if (isset($plugin['requires'])) {
+				$_plugins[$plugin['file']]['requires'] = $plugin['requires'];
+			}
+
+			if (isset($plugin['requires_php'])) {
+				$_plugins[$plugin['file']]['requires_php'] = $plugin['requires_php'];
+			}
+			$plugin_data = get_plugin_data(WP_PLUGIN_DIR . '/' . $plugin['file'], false, true);
+			$plugins_by_name[$plugin_data['Name']] = $plugin['file'];
+		}
+		if (empty(array_keys($_plugins))) {
+			return $result;
+		}
 		if (class_exists('Plugin_Upgrader')) {
 			if ($has_bv_skin) {
 				require_once( "bv_upgrader_skin.php" );
-				$skin = new BVUpgraderSkin("plugin_upgrade");
+				$skin = new BVUpgraderSkin("plugin_upgrade", $plugins_by_name);
 				$this->skin = $skin;
 			} else {
 				$skin = new Bulk_Plugin_Upgrader_Skin();
 			}
 			$upgrader = new Plugin_Upgrader($skin);
-			$result   = $upgrader->bulk_upgrade($plugins);
-		}
-		foreach($plugins as $file) {
-			$res = $result[$file];
-				if (!$res || is_wp_error($res)) {
+
+			if ($bv_bulk_upgrade) {
+				$result = $this->bv_plugin_bulk_upgrade($upgrader, $_plugins);
+			} else {
+				$result = $upgrader->bulk_upgrade(array_keys($_plugins));
+			}
+			if (!is_array($result)) {
+				return array('status' => "Error", 'message' =>'result is not an array');
+			}
+			foreach (array_keys($_plugins) as $file) {
+				if (!array_key_exists($file, $result)) {
 					$result[$file] = array('status' => "Error");
 				} else {
-					$result[$file] = array('status' => "Done");
+					$res = $result[$file];
+					if (!$res || is_wp_error($res)) {
+						$result[$file] = array('status' => "Error");
+					} else {
+						$result[$file] = array('status' => "Done");
+					}
 				}
+			}
 		}
 		return $result;
 	}
 
-	function upgradeThemes($themes, $has_bv_skin = false) {
+	function bv_theme_bulk_upgrade($upgrader, $_themes) {
+		global $wp_version;
+		$themes = array_keys($_themes);
+		$current = get_site_transient('update_themes');
+		$args = array();
+		$defaults = array(
+			'clear_update_cache' => true,
+		);
+		$parsed_args = wp_parse_args($args, $defaults);
+		$upgrader->init();
+		$upgrader->bulk = true;
+		$upgrader->upgrade_strings();
+		add_filter('upgrader_pre_install', array($upgrader, 'current_before'), 10, 2);
+		add_filter('upgrader_post_install', array( $upgrader, 'current_after'), 10, 2);
+		add_filter('upgrader_clear_destination', array($upgrader, 'delete_old_theme'), 10, 4);
+		$upgrader->skin->header();
+		$res = $upgrader->fs_connect(array(WP_CONTENT_DIR));
+		if (!$res) {
+			$upgrader->skin->footer();
+			return false;
+		}
+		$upgrader->skin->bulk_header();
+		$maintenance = (is_multisite() && !empty($themes));
+		foreach ($themes as $theme) {
+			$maintenance = $maintenance || get_stylesheet() === $theme || get_template() === $theme;
+		}
+		if ($maintenance) {
+			$upgrader->maintenance_mode(true);
+		}
+		$results = array();
+		$upgrader->update_count = count($themes);
+		$upgrader->update_current = 0;
+		foreach ($themes as $theme) {
+			$upgrader->update_current++;
+			$upgrader->skin->theme_info = $upgrader->theme_info($theme);
+			$theme_upgrade_data = $_themes[$theme];
+			if (isset($current->response[$theme])) {
+				if (isset($current->response[$theme]['requires'])) {
+					$theme_upgrade_data['requires'] = $current->response[$theme]['requires'];
+				}
+				if (isset($current->response[$theme]['requires_php'])) {
+					$theme_upgrade_data['requires_php'] = $current->response[$theme]['requires_php'];
+				}
+			}
+			if ( isset( $theme_upgrade_data['requires'] ) && function_exists('is_wp_version_compatible') && !is_wp_version_compatible( $theme_upgrade_data['requires'] ) ) {
+				$result = new WP_Error(
+					'incompatible_wp_required_version',
+					sprintf(
+						__( 'Your WordPress version is %1$s, however the new theme version requires %2$s.' ),
+						$wp_version,
+						$theme_upgrade_data['requires']
+					)
+				);
+
+				$upgrader->skin->before( $result );
+				$upgrader->skin->error( $result );
+				$upgrader->skin->after();
+			} elseif ( isset( $theme_upgrade_data['requires_php'] ) && function_exists('is_php_version_compatible') && !is_php_version_compatible( $theme_upgrade_data['requires_php'] ) ) {
+				$result = new WP_Error(
+					'incompatible_php_required_version',
+					sprintf(
+						__( 'The PHP version on your server is %1$s, however the new theme version requires %2$s.' ),
+						PHP_VERSION,
+						$theme_upgrade_data['requires_php']
+					)
+				);
+
+				$upgrader->skin->before( $result );
+				$upgrader->skin->error( $result );
+				$upgrader->skin->after();
+			} else {
+				add_filter('upgrader_source_selection', array($upgrader, 'check_package'));
+				$result = $upgrader->run(
+					array(
+						'package'           => $_themes[$theme]['package'],
+						'destination'       => get_theme_root($theme),
+						'clear_destination' => true,
+						'clear_working'     => true,
+						'is_multi'          => true,
+						'hook_extra'        => array(
+							'theme' => $theme,
+						),
+					)
+				);
+				remove_filter('upgrader_source_selection', array($upgrader, 'check_package'));
+			}
+			$results[$theme] = $result;
+			if (false === $result) {
+				break;
+			}
+		}
+		$upgrader->maintenance_mode(false);
+		wp_clean_themes_cache($parsed_args['clear_update_cache']);
+		do_action(
+			'upgrader_process_complete',
+			$upgrader,
+			array(
+				'action' => 'update',
+				'type'   => 'theme',
+				'bulk'   => true,
+				'themes' => $themes,
+			)
+		);
+		$upgrader->skin->bulk_footer();
+		$upgrader->skin->footer();
+		remove_filter('upgrader_pre_install', array($upgrader, 'current_before'));
+		remove_filter('upgrader_post_install', array($upgrader, 'current_after'));
+		remove_filter('upgrader_clear_destination', array($upgrader, 'delete_old_theme'));
+		$past_failure_emails = get_option('auto_plugin_theme_update_emails', array());
+		foreach ($results as $theme => $result) {
+			if (!$result || is_wp_error($result) || !isset($past_failure_emails[$theme])) {
+				continue;
+			}
+			unset($past_failure_emails[$theme]);
+		}
+		update_option('auto_plugin_theme_update_emails', $past_failure_emails);
+		return $results;
+	}
+
+	function upgradeThemes($themes, $has_bv_skin = false, $bv_bulk_upgrade = false) {
 		$result  = array();
+		$_themes = array();
+		foreach ($themes as $theme) {
+			$_themes[$theme['stylesheet']] = [
+				'package' => $theme['package']
+			];
+			if (isset($theme['requires'])) {
+				$_themes[$theme['stylesheet']]['requires'] = $theme['requires'];
+			}
+			if (isset($theme['requires_php'])) {
+				$_themes[$theme['stylesheet']]['requires_php'] = $theme['requires_php'];
+			}
+		}
+		if (empty(array_keys($_themes))) {
+			return $result;
+		}
 		if (class_exists('Theme_Upgrader')) {
 			if ($has_bv_skin) {
 				require_once( "bv_upgrader_skin.php" );
@@ -380,19 +696,30 @@ class BVManageCallback extends BVCallbackBase {
 				$skin = new Bulk_Theme_Upgrader_Skin();
 			}
 			$upgrader = new Theme_Upgrader($skin);
-			$result   = $upgrader->bulk_upgrade($themes);
-		}
-		foreach($themes as $stylesheet) {
-			$res = $result[$stylesheet];
-			if (!$res || is_wp_error($res)) {
-				$result[$stylesheet] = array('status' => "Error");
+			if ($bv_bulk_upgrade) {
+				$result = $this->bv_theme_bulk_upgrade($upgrader, $_themes);
 			} else {
-				$result[$stylesheet] = array('status' => "Done");
+				$result = $upgrader->bulk_upgrade(array_keys($_themes));
+			}
+			if (!is_array($result)) {
+				return array('status' => "Error", 'message' =>'result is not an array');
+			}
+			foreach (array_keys($_themes) as $stylesheet) {
+				if (!array_key_exists($stylesheet, $result)) {
+					$result[$stylesheet] = array('status' => "Error");
+				} else {
+					$res = $result[$stylesheet];
+					if (!$res || is_wp_error($res)) {
+						$result[$stylesheet] = array('status' => "Error");
+					} else {
+						$result[$stylesheet] = array('status' => "Done");
+					}
+				}
 			}
 		}
 		return $result;
 	}
-	
+
 	function install($params, $has_bv_skin = false) {
 		$result = array();
 		if (isset($params['plugins'])) {
@@ -400,7 +727,7 @@ class BVManageCallback extends BVCallbackBase {
 				if (!array_key_exists('plugins', $result))
 					$result["plugins"] = array();
 				$plugin['dest'] = WP_PLUGIN_DIR;
-				$res = $this->installPackage($plugin, $has_bv_skin);
+				$res = $this->installPackage("plugin", $plugin, $has_bv_skin);
 				$pluginName = $plugin['package'];
 				$result["plugins"][$pluginName] = $res;
 			}
@@ -410,7 +737,7 @@ class BVManageCallback extends BVCallbackBase {
 				if (!array_key_exists('themes', $result))
 					$result["themes"] = array();
 				$theme['dest'] = WP_CONTENT_DIR.'/themes';
-				$res = $this->installPackage($theme, $has_bv_skin);
+				$res = $this->installPackage("theme", $theme, $has_bv_skin);
 				$themeName = $theme['package'];
 				$result["themes"][$themeName] = $res;
 			}
@@ -418,38 +745,56 @@ class BVManageCallback extends BVCallbackBase {
 		return $result;
 	}
 
-	function installPackage($params, $has_bv_skin = false) {
+	function installPackage($type, $params, $has_bv_skin = false) {
 		global $wp_filesystem;
 
 		if (!isset($params['package']) || empty($params['package'])) {
 			return array('status' => "Error", 'message' => "No package is sent");
 		}
 		$valid_domain_regex = "/^(http|https):\/\/[\-\w]*\.(blogvault\.net|w\.org|wp\.org|wordpress\.org)\//";
-		if (preg_match($valid_domain_regex, $params['package']) !== 1) {
+		if (BVHelper::safePregMatch($valid_domain_regex, $params['package']) !== 1) {
 			return array('status' => "Error", 'message' => "Invalid package domain");
 		}
 		if ($has_bv_skin) {
 			require_once( "bv_upgrader_skin.php" );
-			$skin = new BVUpgraderSkin("installer", $params['package']);
+			$skin = new BVUpgraderSkin("installer", array(), $params['package']);
 			$this->skin = $skin;
 		} else {
 			$skin = new WP_Upgrader_Skin();
 		}	
-		$upgrader = new WP_Upgrader($skin);
+		if ("plugin" === $type) {
+			$upgrader = new Plugin_Upgrader($skin);
+		} elseif ("theme" === $type) {
+			$upgrader = new Theme_Upgrader($skin);
+		} else {
+			$upgrader = new WP_Upgrader($skin);
+		}
 		$upgrader->init();
 		$destination = $params['dest'];
 		$clear_destination = isset($params['cleardest']) ? $params['cleardest'] : false;
 		$package_url = $params['package'];
+		$is_parent_theme_install_disabled = isset($params['is_parent_theme_install_disabled']) ? $params['is_parent_theme_install_disabled'] : false;
 		$key = basename($package_url);
+		add_filter('upgrader_source_selection', array($upgrader, 'check_package'));
+		if ("theme" === $type && false === $is_parent_theme_install_disabled) {
+			add_filter('upgrader_post_install', array($upgrader, 'check_parent_theme_filter'), 10, 3);
+		}
 		$res = $upgrader->run(
 			array(
 				'package' => $package_url,
 				'destination' => $destination,
 				'clear_destination' => $clear_destination,
 				'clear_working' => true,
-				'hook_extra' => array(),
+				'hook_extra' => array(
+					"type" => $type,
+					"action" => "install"
+				),
 			)
 		);
+		remove_filter('upgrader_source_selection', array($upgrader, 'check_package'));
+		if ("theme" === $type && false === $is_parent_theme_install_disabled) {
+			remove_filter('upgrader_post_install', array($upgrader, 'check_parent_theme_filter'), 10);
+		}
 		if (is_wp_error($res)) {
 			$res = array('status' => "Error", 'message' => $this->getError($res));
 		} else {
@@ -466,7 +811,15 @@ class BVManageCallback extends BVCallbackBase {
 		return apply_filters( 'mwp_premium_perform_update', array() );
 	}
 
-	function autoLogin($username, $isHttps) {
+	function autoLogin($username, $isHttps, $auto_login_token = null) {
+		# Validate nonce if provided (other plugin compatibility: allow login if token missing)
+		if ($auto_login_token !== null && $auto_login_token !== '') {
+			$validation_result = $this->validateAutoLoginToken($auto_login_token);
+			if ($validation_result !== true) {
+				return $validation_result;
+			}
+		}
+
 		$user = get_user_by('login', $username);
 		if ($user != FALSE) {
 			wp_set_current_user( $user->ID );
@@ -483,10 +836,172 @@ class BVManageCallback extends BVCallbackBase {
 		}
 	}
 
+	private function validateAutoLoginToken($auto_login_token) {
+		# Get plugin name for transient key prefix
+		$plugname = $this->bvinfo->plugname;
+		if (empty($plugname)) {
+			return array(
+				'status' => 'Error',
+				'message' => 'PLUGIN_NAME_NOT_FOUND',
+				'error_code' => 'PLUGIN_NAME_ERROR'
+			);
+		}
+
+		# Construct transient key: {plugname}_auto_login_tk_{token}
+		$transient_key = $plugname . '_auto_login_tk_' . $auto_login_token;
+
+		# Check if token has already been used
+		$used_token = $this->settings->getTransient($transient_key);
+		if ($used_token !== false) {
+			# Token already used - prevent replay attack
+			return array(
+				'status' => 'Error',
+				'message' => 'AUTO_LOGIN_TOKEN_ALREADY_USED',
+				'error_code' => 'AUTO_LOGIN_TOKEN_ERROR'
+			);
+		}
+
+		# Store token as used for 24 hours to prevent reuse
+		# WordPress will automatically clean up expired transients
+		$this->settings->setTransient($transient_key, true, DAY_IN_SECONDS);
+
+		# Token is valid and has been marked as used
+		return true;
+	}
+
+	public function refreshPluginUpdates() {
+		global $wp_current_filter;
+		$wp_current_filter[] = 'load-update-core.php';
+
+		wp_update_plugins();
+
+		array_pop($wp_current_filter);
+
+		wp_update_plugins();
+
+		return true;
+	}
+
+	public function refreshThemeUpdates() {
+		global $wp_current_filter;
+		$wp_current_filter[] = 'load-update-core.php';
+
+		wp_update_themes();
+
+		array_pop($wp_current_filter);
+
+		wp_update_themes();
+
+		return true;
+	}
+
+	function upgradeElementorDB($file) {
+		try {
+			$managerClass = $file === "elementor/elementor.php" ? '\Elementor\Core\Upgrade\Manager' : '\ElementorPro\Core\Upgrade\Manager';
+
+			if (!class_exists($managerClass)) {
+				return array('status' => 'Error', 'error' => 'Elementor plugin not found or disabled', 'source' => 'BV');
+			}
+
+			$manager = new $managerClass();
+			$required_methods = array('get_task_runner', 'should_upgrade', 'on_runner_complete',
+					'get_current_version', 'get_new_version');
+			foreach ($required_methods as $method) {
+				if (!method_exists($manager, $method)) {
+					return array('status' => 'Error', 'error' => 'Required methods are missing', 'source' => 'BV');
+				}
+			}
+
+			$updateInfo = array(
+				'from' => $manager->get_current_version(),
+				'to' => $manager->get_new_version(),
+			);
+
+			if ($manager->should_upgrade()) {
+				$callbacks = $manager->get_upgrade_callbacks();
+
+				if (!empty($callbacks)) {
+					$manager->get_task_runner()->handle_immediately($callbacks);
+					$manager->on_runner_complete(true);
+				}
+			} else {
+				return array('status' => 'Error', 'error' => 'Database Update is not available currently',
+						'update_info' => $updateInfo, 'source' => 'BV');
+			}
+
+			return array('status' => 'Done', 'update_info' => $updateInfo);
+		} catch (Exception $e) {
+			return array('status' => 'Error', 'error' => $e->getMessage());
+		}
+	}
+
+	function upgradeWoocommerceDb() {
+		try {
+			if (!defined('WC_ABSPATH')) {
+				return array('status' => 'Error', 'error' => 'WC not found', 'source' => 'BV');
+			}
+
+			if (file_exists(WC_ABSPATH . 'includes/class-wc-install.php')) {
+				include_once WC_ABSPATH . 'includes/class-wc-install.php';
+			}
+
+			if (file_exists(WC_ABSPATH . 'includes/wc-update-functions.php')) {
+				include_once WC_ABSPATH . 'includes/wc-update-functions.php';
+			}
+
+			if (!class_exists('WC_Install') || !method_exists('WC_Install', 'needs_db_update') ||
+					!method_exists('WC_Install', 'get_db_update_callbacks')) {
+				return array('status' => 'Error', 'error' => 'WC files missing or corrupted', 'source' => 'BV');
+			}
+
+			$current_db_version = $this->settings->getOption('woocommerce_db_version');
+			if (!$current_db_version) {
+				return array('status' => 'Error', 'error' => 'Current WC DB version not available', 'source' => 'BV');
+			}
+
+			$latest_db_version = $this->bvinfo->getLatestWooCommerceDBVersion();
+			if ($current_db_version >= $latest_db_version) {
+				return array('status' => 'Error', 'error' => 'WC DB update not available', 'source' => 'BV');
+			}
+
+			$db_update_callbacks = WC_Install::get_db_update_callbacks();
+
+			$loop = 0;
+			foreach ($db_update_callbacks as $version => $update_callbacks) {
+				if (version_compare($current_db_version, $version, '<')) {
+					foreach ($update_callbacks as $update_callback) {
+						WC()->queue()->schedule_single(
+							time() + $loop,
+							'woocommerce_run_update_callback',
+							array('update_callback' => $update_callback),
+							'woocommerce-db-updates'
+						);
+						$loop++;
+					}
+				}
+			}
+
+			$current_wc_version = WC()->version;
+			if (version_compare($current_db_version, $current_wc_version, '<') &&
+					!WC()->queue()->get_next('woocommerce_update_db_to_current_version')) {
+				WC()->queue()->schedule_single(
+					time() + $loop,
+					'woocommerce_update_db_to_current_version',
+					array('version' => $current_wc_version),
+					'woocommerce-db-updates'
+				);
+			}
+
+			return array('status' => 'Done');
+		} catch (Exception $e) {
+			return array('status' => 'Error', 'error' => $e->getMessage());
+		}
+	}
+
 	function upgrade_db(){
 		if (function_exists('wp_upgrade')) {
 			wp_upgrade();
-			return "DONE";
+			return "Done";
 		} else {
 			return "NOUPGRADERFUNCTION";
 		}
@@ -508,7 +1023,25 @@ class BVManageCallback extends BVCallbackBase {
 			break;
 		case "upgrde":
 			$has_bv_skin = array_key_exists('bvskin', $params);
-			$resp = array("upgrades" => $this->upgrade($params['args'], $has_bv_skin));
+			$bv_bulk_upgrade = array_key_exists('bv_bulk_update', $params['args']);
+			$resp = array("upgrades" => $this->upgrade($params['args'], $has_bv_skin, $bv_bulk_upgrade));
+			break;
+		case "cmbneupgrde":
+			$args = $params['args'];
+			$has_bv_skin = array_key_exists('bvskin', $args);
+			$bv_bulk_upgrade = array_key_exists('bv_bulk_update', $args);
+
+			$resp['upgrades'] = $this->upgrade($args['upgrades'], $has_bv_skin, $bv_bulk_upgrade);
+
+			if (isset($args['delete_transient'])) {
+				$resp['delete_transient'] = $this->settings->deleteTransient($args['delete_transient']);
+			}
+			if (isset($args['wp_update_plugins'])) {
+				$resp['wp_update_plugins'] = $this->refreshPluginUpdates();
+			}
+			if (isset($args['wp_update_themes'])) {
+				$resp['wp_update_themes'] = $this->refreshThemeUpdates();
+			}
 			break;
 		case "edt":
 			$resp = array("edit" => $this->edit($params['args']));
@@ -530,10 +1063,28 @@ class BVManageCallback extends BVCallbackBase {
 			$isHttps = false;
 			if (array_key_exists('https', $params))
 				$isHttps = true;
-			$resp = array("autologin" => $this->autoLogin($params['username'], $isHttps));
+			$auto_login_token = array_key_exists('auto_login_token', $params) ? $params['auto_login_token'] : null;
+			$resp = array("autologin" => $this->autoLogin($params['username'], $isHttps, $auto_login_token));
 			break;
 		case "updatedb":
 			$resp = array("status" => $this->upgrade_db());
+			break;
+		case "updateplgndb":
+			$resp = array();
+			$files = $params['files'];
+
+			foreach ($files as $file) {
+				switch ($file) {
+					case "woocommerce/woocommerce.php":
+						$resp[$file] = $this->upgradeWoocommerceDb();
+						break;
+					case "elementor/elementor.php":
+					case "elementor-pro/elementor-pro.php":
+						$resp[$file] = $this->upgradeElementorDB($file);
+						break;
+				}
+			}
+
 			break;
 		default:
 			$resp = false;

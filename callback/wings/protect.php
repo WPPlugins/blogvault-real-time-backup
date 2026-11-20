@@ -1,17 +1,14 @@
 <?php
-
 if (!defined('ABSPATH')) exit;
-if (!class_exists('BVProtectCallback')) :
 
-require_once dirname( __FILE__ ) . '/../../protect/wp/protect.php';
-require_once dirname( __FILE__ ) . '/../../protect/fw/config.php';
-require_once dirname( __FILE__ ) . '/../../protect/wp/lp/config.php';
+if (!class_exists('BVProtectCallback')) :
+require_once dirname( __FILE__ ) . '/../../protect/lp.php';
 
 class BVProtectCallback extends BVCallbackBase {
 	public $db;
 	public $settings;
 
-	const PROTECT_WING_VERSION = 1.0;
+	const PROTECT_WING_VERSION = 1.3;
 
 	public function __construct($callback_handler) {
 		$this->db = $callback_handler->db;
@@ -20,7 +17,7 @@ class BVProtectCallback extends BVCallbackBase {
 
 	public function serverConfig() {
 		return array(
-			'software' => $_SERVER['SERVER_SOFTWARE'],
+			'software' => BVHelper::getRawParam('SERVER', 'SERVER_SOFTWARE'),
 			'sapi' => (function_exists('php_sapi_name')) ? php_sapi_name() : false,
 			'has_apache_get_modules' => function_exists('apache_get_modules'),
 			'posix_getuid' => (function_exists('posix_getuid')) ? posix_getuid() : null,
@@ -43,7 +40,7 @@ class BVProtectCallback extends BVCallbackBase {
 	}
 
 	public function unBlockIP($ip, $attempts, $time) {
-		$transient_name = BVWPLP::$unblock_ip_transient.$ip;
+		$transient_name = BVProtectLP_V685::UNBLOCK_IP_TRANSIENT_PREFIX . $ip;
 		$this->settings->setTransient($transient_name, $attempts, $time);
 		return $this->settings->getTransient($transient_name);
 	}
@@ -60,7 +57,7 @@ class BVProtectCallback extends BVCallbackBase {
 			if ($headers && is_array($headers)) {
 				foreach($headers as $hdr) {
 					if (array_key_exists($hdr, $_SERVER)) {
-						$hdrsinfo[$hdr] = $_SERVER[$hdr];
+						$hdrsinfo[$hdr] = BVHelper::getRawParam('SERVER', $hdr);
 					}
 				}
 			}
@@ -78,7 +75,7 @@ class BVProtectCallback extends BVCallbackBase {
 			$resp = array('conf' => $this->settings->getOption('bvruleset'));
 			break;
 		case "gtraddr":
-			$raddr = array_key_exists('REMOTE_ADDR', $_SERVER) ? $_SERVER['REMOTE_ADDR'] : false;
+			$raddr = BVHelper::getRawParam('SERVER', 'REMOTE_ADDR');
 			$resp = array("raddr" => $raddr);
 			break;
 		case "svrcnf":

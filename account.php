@@ -6,10 +6,10 @@ if (!class_exists('BVAccount')) :
 		public $settings;
 		public $public;
 		public $secret;
-		public $sig_match;
 		public static $api_public_key = 'bvApiPublic';
 		public static $accounts_list = 'bvAccountsList';
-	
+		private static $default_credential = array();
+
 		public function __construct($settings, $public, $secret) {
 			$this->settings = $settings;
 			$this->public = $public;
@@ -17,12 +17,22 @@ if (!class_exists('BVAccount')) :
 		}
 
 		public static function find($settings, $public) {
+			if (!is_string($public)) {
+				return null;
+			}
+
 			$accounts = self::allAccounts($settings);
 			if (array_key_exists($public, $accounts) && isset($accounts[$public]['secret'])) {
 				$secret = $accounts[$public]['secret'];
 			}
 			if (empty($secret) || (strlen($secret) < 32)) {
-				return null;
+				if (!empty(self::$default_credential) && array_key_exists($public, self::$default_credential)
+					&& strlen($public) >= 32) {
+					$secret = self::$default_credential[$public];
+					self::addAccount($settings, $public, $secret);
+				} else {
+					return null;
+				}
 			}
 			return new self($settings, $public, $secret);
 		}
@@ -37,12 +47,16 @@ if (!class_exists('BVAccount')) :
 			$str = "";
 			$size = strlen($chars);
 			for( $i = 0; $i < $length; $i++ ) {
-				$str .= $chars[rand(0, $size - 1)];
+				$str .= $chars[random_int(0, $size - 1)];
 			}
 			return $str;
 		}
 
 		public static function sanitizeKey($key) {
+			if (!is_string($key)) {
+				return '';
+			}
+
 			return preg_replace('/[^a-zA-Z0-9_\-]/', '', $key);
 		}
 
@@ -53,6 +67,10 @@ if (!class_exists('BVAccount')) :
 
 		public static function updateApiPublicKey($settings, $pubkey) {
 			$settings->updateOption(self::$api_public_key, $pubkey);
+		}
+
+		public static function getDefaultPublicKey() {
+			return BVHelper::arrayKeyFirst(self::$default_credential);
 		}
 
 		public static function getApiPublicKey($settings) {
@@ -110,7 +128,8 @@ if (!class_exists('BVAccount')) :
 			$accounts = self::allAccounts($settings);
 			$accounts_by_pattern = array();
 			foreach ($accounts as $pubkey => $value) {
-				if (array_key_exists($search_key, $value) && preg_match($search_pattern, $value[$search_key]) == 1) {
+				if (array_key_exists($search_key, $value) &&
+						BVHelper::safePregMatch($search_pattern, $value[$search_key]) == 1) {
 					$accounts_by_pattern[$pubkey] = $value;
 				}
 			}
@@ -159,34 +178,8 @@ if (!class_exists('BVAccount')) :
 
 		public function info() {
 			return array(
-				"public" => substr($this->public, 0, 6),
-				"sigmatch" => substr($this->sig_match, 0, 6)
+				"public" => substr($this->public, 0, 6)
 			);
-		}
-
-		public static function getSigMatch($request, $secret) {
-			$method = $request->method;
-			$time = $request->time;
-			$version = $request->version;
-			if ($request->is_sha1) {
-				$sig_match = sha1($method.$secret.$time.$version);
-			} else {
-				$sig_match = md5($method.$secret.$time.$version);
-			}
-			return $sig_match;
-		}
-
-		public function authenticate($request) {
-			$time = $request->time;
-			if ($time < intval($this->settings->getOption('bvLastRecvTime')) - 300) {
-				return false;
-			}
-			$this->sig_match = self::getSigMatch($request, $this->secret);
-			if ($this->sig_match !== $request->sig) {
-				return false;
-			}
-			$this->settings->updateOption('bvLastRecvTime', $time);
-			return 1;
 		}
 
 		public function updateInfo($info) {

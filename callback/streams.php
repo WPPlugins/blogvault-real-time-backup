@@ -1,5 +1,12 @@
 <?php
-
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fread
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
+// We use php method like fread, fwrite to read only a portion of a file, we don't have a direct method for partial reads since WP_Filesystem doesn't support a direct equivalent to fread, fwrite.
+// The entire file deals with custom stream handling
+// We need direct socket/file operations for this functionality
+// WordPress filesystem alternatives wouldn't work for this use case
+// It's better to disable these specific rules at file level than adding individual ignore comments
 if (!defined('ABSPATH')) exit;
 if (!class_exists('BVRespStream')) :
 
@@ -45,36 +52,47 @@ if (!class_exists('BVRespStream')) :
 			return array('stream' => $stream);
 		}
 
-		public function writeStream($_string) {
-			if (strlen($_string) > 0) {
-				$chunk = "";
+		public function writeStream($chunk) {
+			if (strlen($chunk) > 0) {
+				$bvb64_prefix = "";
 				if ($this->bvb64stream) {
 					$chunk_size = $this->bvb64cksize;
-					$_string = $this->base64Encode($_string, $chunk_size);
-					$chunk .= "BVB64" . ":";
+					$chunk = $this->base64Encode($chunk, $chunk_size);
+					$bvb64_prefix .= "BVB64" . ":";
 				}
-				$chunk .= (strlen($_string) . ":" . $_string);
+
+				$hash_prefix = "";
 				if ($this->checksum == 'crc32') {
-					$chunk = "CRC32" . ":" . crc32($_string) . ":" . $chunk;
+					$hash_prefix .= "CRC32" . ":" . crc32($chunk) . ":";
 				} else if ($this->checksum == 'md5') {
-					$chunk = "MD5" . ":" . md5($_string) . ":" . $chunk;
+					$hash_prefix .= "MD5" . ":" . md5($chunk) . ":";
 				}
+
+				$chunk = $hash_prefix . $bvb64_prefix . strlen($chunk) . ":" . $chunk;
+
 				$this->writeChunk($chunk);
 			}
 		}
 	}
 
 class BVRespStream extends BVStream {
+	public $bvboundry;
+
 	function __construct($request) {
 		parent::__construct($request);
+		// Restrict boundary to safe chars so raw echo cannot inject into response (XSS).
+		$raw = isset($request->bvboundry) ? (string) $request->bvboundry : '';
+		$sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '', $raw);
+		$this->bvboundry = $sanitized !== '' ? $sanitized : 'bvstream';
 	}
 
-	public function writeChunk($_string) {
-		echo "ckckckckck".$_string."ckckckckck";
+	public function writeChunk($chunk) {
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- bvboundry sanitized in constructor; raw stream protocol (not HTML), chunk must not be escaped or stream is corrupted
+		echo $this->bvboundry . "ckckckckck" . $chunk . $this->bvboundry . "ckckckckck";
 	}
-
 	public function endStream() {
-		echo "rerererere";
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- bvboundry sanitized in constructor; raw stream protocol (not HTML)
+		echo $this->bvboundry . "rerererere";
 
 		return array();
 	}
@@ -163,7 +181,7 @@ class BVHttpStream extends BVStream {
 			"Content-Disposition" => "form-data; name=bvinfile; filename=data",
 			"Content-Type" => "application/octet-stream"
 		);
-		$rnd = rand(100000, 999999);
+		$rnd = rand(100000, 999999); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_rand
 		$this->boundary = "----".$rnd;
 		$prologue = "--".$this->boundary."\r\n";
 		foreach($mph as $key=>$val) {
@@ -208,7 +226,7 @@ class BVHttpStream extends BVStream {
 		while (!feof($this->conn)) {
 			$line = fgets($this->conn, 4096);
 			if (1 == $state) {
-				if (!preg_match('/HTTP\/(\\d\\.\\d)\\s*(\\d+)\\s*(.*)/', $line, $m)) {
+				if (!BVHelper::safePregMatch('/HTTP\/(\\d\\.\\d)\\s*(\\d+)\\s*(.*)/', $line, $m)) {
 					$response['httperror'] = "Status code line invalid: ".htmlentities($line);
 					return $response;
 				}
@@ -223,7 +241,7 @@ class BVHttpStream extends BVStream {
 						$response['body'] = fread($this->conn, $conlen);
 					return $response;
 				}
-				if (!preg_match('/([^:]+):\\s*(.*)/', $line, $m)) {
+				if (!BVHelper::safePregMatch('/([^:]+):\\s*(.*)/', $line, $m)) {
 					// Skip to the next header
 					continue;
 				}
@@ -238,4 +256,5 @@ class BVHttpStream extends BVStream {
 		return $response;
 	}
 }
+// phpcs:enable
 endif;

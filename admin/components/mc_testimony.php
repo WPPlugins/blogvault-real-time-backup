@@ -1,6 +1,6 @@
 <ul class="slides text-center">
 	<li class="slide text-center">
-		<img class="user" src="https://mk0malcaredecgig0d6a.kinstacdn.com/wp-content/uploads/2019/09/Ivica-Delic-1.jpg"/><br/>
+		<img class="user" src="<?php echo esc_url(plugins_url("/../../img/mc-testimony-ivica-delic.jpg", __FILE__)); ?>"/><br/>
 		<p>
 			<h1>&ldquo;</h1>
 			<h4>Incredibly simple but powerful plugin. I am amazed how smooth its all going, scanning is very fast and I am so happy that I found it &#128578;</h4>
@@ -8,7 +8,7 @@
 		</p>
 	</li>
 	<li class="slide text-center">
-		<img class = "user" src="https://mk0malcaredecgig0d6a.kinstacdn.com/wp-content/uploads/2019/01/Miriam-Schwab-2.jpg"/><br/>
+		<img class = "user" src="<?php echo esc_url(plugins_url("/../../img/mc-testimony-miriam-schwab.jpg", __FILE__)); ?>"/><br/>
 
 		<p>
 			<h1>&ldquo;</h1>
@@ -17,7 +17,7 @@
 		</p>
 	</li>
 	<li class="slide text-center">
-		<img class = "user" src="https://mk0malcaredecgig0d6a.kinstacdn.com/wp-content/uploads/2019/09/david-mccan-wordpress-cpt-1-1.jpg"/><br/>
+		<img class = "user" src="<?php echo esc_url(plugins_url("/../../img/mc-testimony-david-mccan.jpg", __FILE__)); ?>"/><br/>
 
 		<p>
 			<h1>&ldquo;</h1>
@@ -26,7 +26,7 @@
 		</p>
 	</li>
 	<li class="slide text-center">
-		<img class = "user" src="https://mk0malcaredecgig0d6a.kinstacdn.com/wp-content/uploads/2019/09/Armand-Girard-1.jpg"/><br/>
+		<img class = "user" src="<?php echo esc_url(plugins_url("/../../img/mc-testimony-armand-girard.jpg", __FILE__)); ?>"/><br/>
 
 		<p>
 			<h1>&ldquo;</h1>

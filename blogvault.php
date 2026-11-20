@@ -5,8 +5,10 @@ Plugin URI: https://blogvault.net
 Description: Easiest way to backup & secure your WordPress site
 Author: Backup by BlogVault
 Author URI: https://blogvault.net
-Version: 4.73
+Version: 6.85
 Network: True
+License: GPLv2 or later
+License URI: [http://www.gnu.org/licenses/gpl-2.0.html](http://www.gnu.org/licenses/gpl-2.0.html)
  */
 
 /*  Copyright 2017  BlogVault  (email : support@blogvault.net)
@@ -37,6 +39,12 @@ require_once dirname( __FILE__ ) . '/wp_api.php';
 require_once dirname( __FILE__ ) . '/wp_actions.php';
 require_once dirname( __FILE__ ) . '/info.php';
 require_once dirname( __FILE__ ) . '/account.php';
+require_once dirname( __FILE__ ) . '/helper.php';
+require_once dirname( __FILE__ ) . '/wp_file_system.php';
+require_once dirname( __FILE__ ) . '/wp_2fa/wp_2fa.php';
+
+require_once dirname( __FILE__ ) . '/wp_login_whitelabel.php';
+
 ##WPCACHEMODULE##
 
 
@@ -53,17 +61,30 @@ register_uninstall_hook(__FILE__, array('BVWPAction', 'uninstall'));
 register_activation_hook(__FILE__, array($wp_action, 'activate'));
 register_deactivation_hook(__FILE__, array($wp_action, 'deactivate'));
 
+
 add_action('wp_footer', array($wp_action, 'footerHandler'), 100);
-add_action('clear_bv_services_config', array($wp_action, 'clear_bv_services_config'));
+add_action('wp_enqueue_scripts', array($wp_action, 'enqueueBrokenLinkHighlight'));
+add_action('bv_clear_bv_services_config', array($wp_action, 'clear_bv_services_config'));
+add_action('bv_clear_mu_plugin', array($wp_action, 'clear_mu_plugin'));
+
 ##SOADDUNINSTALLACTION##
 
-##WPCLIMODULE##
+##DISABLE_OTHER_OPTIMIZATION_PLUGINS##
+
+if (defined('WP_CLI') && WP_CLI) {
+		require_once dirname( __FILE__ ) . '/wp_cli.php';
+		$wp_cli = new BVWPCli($bvsettings, $bvinfo, $bvsiteinfo, $bvapi);
+		WP_CLI::add_command("blogvault", $wp_cli);
+}
+
+
 if (is_admin()) {
 	require_once dirname( __FILE__ ) . '/wp_admin.php';
 	$wpadmin = new BVWPAdmin($bvsettings, $bvsiteinfo);
 	add_action('admin_init', array($wpadmin, 'initHandler'));
-	add_filter('all_plugins', array($wpadmin, 'initBranding'));
+	add_filter('all_plugins', array($wpadmin, 'initWhitelabel'));
 	add_filter('plugin_row_meta', array($wpadmin, 'hidePluginDetails'), 10, 2);
+	add_filter('debug_information', array($wpadmin, 'handlePluginHealthInfo'), 10, 1);
 	if ($bvsiteinfo->isMultisite()) {
 		add_action('network_admin_menu', array($wpadmin, 'menu'));
 	} else {
@@ -71,80 +92,110 @@ if (is_admin()) {
 	}
 	add_filter('plugin_action_links', array($wpadmin, 'settingsLink'), 10, 2);
 	add_action('admin_head', array($wpadmin, 'removeAdminNotices'), 3);
+
+	##MG_AJAX_ACTIONS##
+	##POPUP_ON_DEACTIVATION##
 	add_action('admin_notices', array($wpadmin, 'activateWarning'));
 	add_action('admin_enqueue_scripts', array($wpadmin, 'bvsecAdminMenu'));
-	##SOADMINMENU##
 }
 
-
-if ((array_key_exists('bvreqmerge', $_POST)) || (array_key_exists('bvreqmerge', $_GET))) {
-	$_REQUEST = array_merge($_GET, $_POST);
+if ((array_key_exists('bvreqmerge', $_POST)) || (array_key_exists('bvreqmerge', $_GET))) { // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
+	$_REQUEST = array_merge($_GET, $_POST); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
 }
 
-if ((array_key_exists('bvplugname', $_REQUEST)) && ($_REQUEST['bvplugname'] == "bvbackup")) {
+#Service active check
+if ($bvinfo->config != false) {
+	add_action('bv_remove_bv_preload_include', array($wp_action, 'removeBVPreload'));
+}
+
+require_once dirname( __FILE__ ) . '/php_error_monitoring/monitoring.php';
+BVWPPHPErrorMonitoring::init();
+
+require_once dirname( __FILE__ ) . '/wp_actlog.php';
+$actlog = new BVWPActLog($bvdb, $bvsettings, $bvinfo, $bvinfo->isActivityLogActive() ? $bvinfo->config['activity_log'] : array());
+$actlog->init();
+
+if ($bvinfo->hasValidDBVersion()) {
+	##MAINTENANCEMODULE##
+}
+
+if (BVHelper::getRawParam('REQUEST', 'bvplugname') == "bvbackup") {
 	require_once dirname( __FILE__ ) . '/callback/base.php';
 	require_once dirname( __FILE__ ) . '/callback/response.php';
 	require_once dirname( __FILE__ ) . '/callback/request.php';
 	require_once dirname( __FILE__ ) . '/recover.php';
 
-	$pubkey = BVAccount::sanitizeKey($_REQUEST['pubkey']);
+	$pubkey = BVHelper::getRawParam('REQUEST', 'pubkey');
+	$pubkey = isset($pubkey) ? BVAccount::sanitizeKey($pubkey) : '';
+	$rcvracc = BVHelper::getRawParam('REQUEST', 'rcvracc');
 
-	if (array_key_exists('rcvracc', $_REQUEST)) {
-		$account = BVRecover::find($bvsettings, $pubkey);
+	if (isset($rcvracc)) {
+		$bvctag = BVHelper::getRawParam('REQUEST', 'bvctag');
+		$bvctag = isset($bvctag) ? BVAccount::sanitizeKey($bvctag) : null;
+		$account = BVRecover::find($bvsettings, $pubkey, $bvctag);
 	} else {
 		$account = BVAccount::find($bvsettings, $pubkey);
 	}
 
-	$request = new BVCallbackRequest($account, $_REQUEST);
+	$request = new BVCallbackRequest($account, $_REQUEST, $bvsettings); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	$response = new BVCallbackResponse($request->bvb64cksize);
 
-	if ($account && (1 === $account->authenticate($request))) {
-		define('BVBASEPATH', plugin_dir_path(__FILE__));
+	if ($request->authenticate() === 1) {
+		$bv_frm_tstng = BVHelper::getRawParam('REQUEST', 'bv_frm_tstng');
+		if (isset($bv_frm_tstng)) {
+			require_once dirname(__FILE__) . '/form_testing/form_testing.php';
+			$form_testing = new BVFormTesting($_REQUEST); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$form_testing->init();
 
-
-		require_once dirname( __FILE__ ) . '/callback/handler.php';
-
-		$params = $request->processParams($_REQUEST);
-		if ($params === false) {
-			$resp = array(
-				"account_info" => $account->info(),
-				"request_info" => $request->info(),
-				"bvinfo" => $bvinfo->info(),
-				"statusmsg" => "BVPRMS_CORRUPTED"
-			);
-			$response->terminate($resp);
-		}
-		$request->params = $params;
-		$callback_handler = new BVCallbackHandler($bvdb, $bvsettings, $bvsiteinfo, $request, $account, $response);
-		if ($request->is_afterload) {
-			add_action('wp_loaded', array($callback_handler, 'execute'));
-		} else if ($request->is_admin_ajax) {
-			add_action('wp_ajax_bvadm', array($callback_handler, 'bvAdmExecuteWithUser'));
-			add_action('wp_ajax_nopriv_bvadm', array($callback_handler, 'bvAdmExecuteWithoutUser'));
 		} else {
-			$callback_handler->execute();
+			define('BVBASEPATH', plugin_dir_path(__FILE__));
+
+
+			require_once dirname( __FILE__ ) . '/callback/handler.php';
+
+			$params = $request->processParams($_REQUEST); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			if ($params === false) {
+				$response->terminate($request->corruptedParamsResp());
+			}
+			$request->params = $params;
+			if (isset($request->pagenow)) {
+				$GLOBALS['pagenow'] = $request->pagenow;
+				if ($request->is_admin_ajax) {
+					$_SERVER['PHP_SELF'] = dirname($_SERVER['PHP_SELF']) . '/' . $request->pagenow;
+				}
+			}
+			$callback_handler = new BVCallbackHandler($bvdb, $bvsettings, $bvsiteinfo, $request, $account, $response);
+			if ($request->is_update_core_page) {
+				add_action('load-update-core.php', array($callback_handler, 'execute'), PHP_INT_MAX);
+			} else if ($request->is_aftershutdown) {
+				$callback_handler->deferExecutionUntilShutdown();
+			} else if ($request->is_afterload) {
+				add_action('wp_loaded', array($callback_handler, 'execute'));
+			} else if ($request->is_admin_ajax) {
+				add_action('wp_ajax_bvadm', array($callback_handler, 'bvAdmExecuteWithUser'));
+				add_action('wp_ajax_nopriv_bvadm', array($callback_handler, 'bvAdmExecuteWithoutUser'));
+			} else {
+				$callback_handler->execute();
+			}
 		}
 	} else {
-		$resp = array(
-			"account_info" => $account ? $account->info() : array("error" => "ACCOUNT_NOT_FOUND"),
-			"request_info" => $request->info(),
-			"bvinfo" => $bvinfo->info(),
-			"statusmsg" => "FAILED_AUTH",
-			"api_pubkey" => substr(BVAccount::getApiPublicKey($bvsettings), 0, 8),
-			"def_sigmatch" => substr(BVAccount::getSigMatch($request, BVRecover::getDefaultSecret($bvsettings)), 0, 8)
-		);
-		$response->terminate($resp);
+		$response->terminate($request->authFailedResp());
 	}
 } else {
 	if ($bvinfo->hasValidDBVersion()) {
 		if ($bvinfo->isProtectModuleEnabled()) {
-		require_once dirname( __FILE__ ) . '/protect/wp/protect.php';
-		$bvprotect = new BVProtect($bvdb, $bvsettings);
-		$bvprotect->init();
-		if ($bvinfo->isActivePlugin() && !(defined( 'WP_CLI' ) && WP_CLI)) {
-			$bvprotect->run();
+			require_once dirname( __FILE__ ) . '/protect/protect.php';
+			//For backward compatibility.
+			BVProtect_V685::$settings = new BVWPSettings();
+			BVProtect_V685::$db = new BVWPDb();
+			BVProtect_V685::$info = new BVInfo(BVProtect_V685::$settings);
+
+			add_action('bv_clear_pt_config', array('BVProtect_V685', 'uninstall'));
+
+			if ($bvinfo->isActivePlugin()) {
+				BVProtect_V685::init(BVProtect_V685::MODE_WP);
+			}
 		}
-	}
 
 		if ($bvinfo->isDynSyncModuleEnabled()) {
 		require_once dirname( __FILE__ ) . '/wp_dynsync.php';
@@ -153,16 +204,9 @@ if ((array_key_exists('bvplugname', $_REQUEST)) && ($_REQUEST['bvplugname'] == "
 		$dynsync->init();
 	}
 
-		if ($bvinfo->isServiceActive('activity_log')) {
-		require_once dirname( __FILE__ ) . '/wp_actlog.php';
-		$bvconfig = $bvinfo->config;
-		$actlog = new BVWPActLog($bvdb, $bvsettings, $bvinfo, $bvconfig['activity_log']);
-		$actlog->init();
-	}
-
 	}
 	$bv_site_settings = $bvsettings->getOption('bv_site_settings');
-	if (isset($bv_site_settings)) {
+	if (is_array($bv_site_settings)) {
 		if (isset($bv_site_settings['wp_auto_updates'])) {
 			$wp_auto_updates = $bv_site_settings['wp_auto_updates'];
 			if (array_key_exists('block_auto_update_core', $wp_auto_updates)) {
@@ -180,6 +224,44 @@ if ((array_key_exists('bvplugname', $_REQUEST)) && ($_REQUEST['bvplugname'] == "
 				add_filter('auto_update_translation', '__return_false' );
 			}
 		}
+	
+		if (isset($bv_site_settings['security_hardening'])) {
+			$bv_security_hardening = $bv_site_settings['security_hardening'];
+			if (is_array($bv_security_hardening) &&
+					isset($bv_security_hardening['version']) &&
+					$bv_security_hardening['version'] === 1) {
+				if (isset($bv_security_hardening['disable_file_editor']) &&
+						$bv_security_hardening['disable_file_editor'] === true &&
+						!defined('DISALLOW_FILE_EDIT')) {
+					define('DISALLOW_FILE_EDIT', true);
+				}
+	
+				if (isset($bv_security_hardening['block_file_modifications']) &&
+						$bv_security_hardening['block_file_modifications'] === true &&
+						!defined('DISALLOW_FILE_MODS')) {
+					define('DISALLOW_FILE_MODS', true);
+				}
+			}
+		}
+
 	}
 
+	if (is_admin()) {
+		add_filter('site_transient_update_plugins', array($wpadmin, 'hidePluginUpdate'));
+	}
+
+	##THIRDPARTYCACHINGMODULE##
 }
+
+if (BVWP2FA::isEnabled($bvsettings)) {
+	$wp_2fa = new BVWP2FA();
+	$wp_2fa->init();
+}
+
+if (!empty($bvinfo->getLPWhitelabelInfo())) {
+	$wp_login_whitelabel = new BVWPLoginWhitelabel();
+	$wp_login_whitelabel->init();
+}
+
+add_action('bv_clear_wp_2fa_config', array($wp_action, 'clear_wp_2fa_config'));
+##PLUGIN_LOADED_MODULE##

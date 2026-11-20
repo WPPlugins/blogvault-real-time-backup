@@ -11,9 +11,9 @@ class BVWPSiteInfo {
 			return get_bloginfo('wpurl');
 	}
 
-	public function siteurl() {
+	public function siteurl($path = '', $scheme = null) {
 		if (function_exists('site_url')) {
-			return site_url();
+			return site_url($path, $scheme);
 		} else {
 			return get_bloginfo('wpurl');
 		}
@@ -28,8 +28,8 @@ class BVWPSiteInfo {
 	}
 
 	public function isMultisite() {
-		if (function_exists('is_multisite'))
-			return is_multisite();
+		if (function_exists('is_multisite') && is_multisite())
+			return true;
 		return false;
 	}
 
@@ -58,15 +58,17 @@ class BVWPSiteInfo {
 		$info['siteurl'] = $this->siteurl();
 		$info['homeurl'] = $this->homeurl();
 		if (array_key_exists('SERVER_ADDR', $_SERVER)) {
-			$info['serverip'] = $_SERVER['SERVER_ADDR'];
+			$info['serverip'] = BVHelper::getRawParam('SERVER', 'SERVER_ADDR');
 		}
+
 		$info['abspath'] = ABSPATH;
 	}
 
 	public function serversig($full = false) {
 		$sig_param = ABSPATH;
-		if (array_key_exists('SERVER_ADDR', $_SERVER)) {
-			$sig_param = $_SERVER['SERVER_ADDR'].ABSPATH;
+		$server_addr = BVHelper::getRawParam('SERVER', 'SERVER_ADDR');
+		if (isset($server_addr)) {
+			$sig_param = $server_addr . ABSPATH;
 		}
 		$sig = sha1($sig_param);
 		if ($full)
@@ -88,8 +90,14 @@ class BVWPSiteInfo {
 			return substr($sig, 0, 6);
 	}
 
-	public static function isCWServer() {
-		return isset($_SERVER['cw_allowed_ip']);
+	public static function isWSKHosted() {
+		$server_addr = BVHelper::getRawParam('SERVER', 'SERVER_ADDR');
+		if (isset($server_addr) && function_exists('gethostbyaddr')) {
+			$hostFromIp = gethostbyaddr($server_addr);
+			return preg_match('/webspacekit\.com/', $hostFromIp) === 1;
+		}
+
+		return false;
 	}
 }
 endif;
